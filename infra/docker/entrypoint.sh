@@ -4,12 +4,8 @@ set -e
 # Set default timeout
 : "${EXPERIMENT_TIMEOUT:=300}"
 
-# Generate timestamped run directory
-timestamp=$(date +"%Y-%m-%dT%H-%M-%S")
-run_path="/app/sandbox/writable/run_$timestamp"
-
-# Export the run path as an environment variable
-export EXPERIMENT_RUN_PATH="$run_path"
+# Use the run path provided from the environment
+: "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
 echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
 
@@ -40,7 +36,7 @@ else
     echo "✓ Read access to /app/data confirmed"
 fi
 
-# Create subdirectories in the run directory
+# The run directory should already exist, but create subdirectories
 mkdir -p "$EXPERIMENT_RUN_PATH"/{planning,experiment,results,scratchpad}
 
 # Verify write access to the specific run directory

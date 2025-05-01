@@ -25,26 +25,21 @@ services:
       # Mount read_only directory with read-only permissions
       - ../sandbox/read_only:/app/sandbox/read_only:ro
       # Mount writable directories with read-only permissions by default
-      - ../sandbox/writable:/app/sandbox/writable:ro
+      # - ../sandbox/writable:/app/sandbox/writable:ro
+      # Mount the specific run directory with read-write permissions
+      - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
     read_only: true
     tmpfs:
       - /tmp
       - /run
       - /var/log
-      # Add a tmpfs mount for the specific run directory that will be created by entrypoint.sh
-      - ${EXPERIMENT_RUN_PATH:-/app/sandbox/writable/tmp_run}:exec,rw,size=500m
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     networks:
       openai-network:
-        # Only allow outbound traffic to OpenAI API
         aliases:
           - openai-api
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-networks:
-  openai-network:
-    driver: bridge
