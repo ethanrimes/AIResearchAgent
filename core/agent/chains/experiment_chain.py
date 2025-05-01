@@ -25,8 +25,6 @@ from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
 from core.agent.tools.run_bash import RunBashTool
 from core.agent.tools.run_code import RunCodeTool
 
-logger = logging.getLogger(__name__)
-
 class ExperimentChain:
     """
     Chain responsible for implementing and running experiments.
@@ -49,6 +47,8 @@ class ExperimentChain:
         self.output_dir = workspace["experiment"]
         self.results_dir = workspace["results"]
         self.scratchpad_file = workspace["scratchpad"] / "experiment_notes.txt"
+
+        self.logger = logging.getLogger("ai_research_agent.experiment_chain")
         
         # Initialize tools
         self.tools = self._init_tools()
@@ -56,7 +56,7 @@ class ExperimentChain:
         # Initialize agent
         self.agent = self._init_agent()
         
-        logger.info("ExperimentChain initialized")
+        self.logger.info("ExperimentChain initialized")
         
     def _init_tools(self) -> List[BaseTool]:
         """
@@ -143,7 +143,7 @@ class ExperimentChain:
         Returns:
             Dict containing the experiment results.
         """
-        logger.info("Running experiment implementation and execution")
+        self.logger.info("Running experiment implementation and execution")
         
         plan_file = self.workspace["planning"] / "experiment_plan.json"
         results_summary_file = self.results_dir / "results_summary.json"
@@ -158,15 +158,15 @@ class ExperimentChain:
         
         # Check if the results file was created
         if not results_summary_file.exists():
-            logger.error(f"Experiment agent failed to create results file: {results_summary_file}")
+            self.logger.error(f"Experiment agent failed to create results file: {results_summary_file}")
             raise FileNotFoundError(f"Experiment results file not found: {results_summary_file}")
             
         # Load and return the experiment results
         try:
             with open(results_summary_file, 'r') as f:
                 experiment_results = json.load(f)
-            logger.info("Experiment completed and results generated")
+            self.logger.info("Experiment completed and results generated")
             return experiment_results
         except Exception as e:
-            logger.error(f"Error loading experiment results file: {e}")
+            self.logger.error(f"Error loading experiment results file: {e}")
             raise

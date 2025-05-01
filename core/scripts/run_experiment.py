@@ -19,17 +19,8 @@ sys.path.append(str(project_root))
 
 # Import the Agent class
 from core.agent.agent import Agent
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(f"/app/logs/experiment_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
-    ]
-)
-logger = logging.getLogger(__name__)
+# Import the logging utility
+from core.utils.logging_utils import setup_logging
 
 def parse_args():
     """Parse command-line arguments."""
@@ -54,22 +45,24 @@ def main():
     args = parse_args()
     
     try:
-        # Log startup information
-        logger.info("Starting AI Research Agent")
-        logger.info(f"Using configuration file: {args.config}")
-
         # Check if run directory was specified
         run_dir = args.run_dir
         if not run_dir:
             # Create a new run directory
             run_dir = Path("/app/sandbox/writable") / f"run_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
             run_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created new run directory: {run_dir}")
         else:
             run_dir = Path(run_dir)
             run_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Using specified run directory: {run_dir}")
             
+        # Set up logging using the utility function
+        logger = setup_logging(run_dir=run_dir)
+            
+        # Log startup information
+        logger.info("Starting AI Research Agent")
+        logger.info(f"Using configuration file: {args.config}")
+        logger.info(f"Using run directory: {run_dir}")
+        
         # Create the active run path file
         active_run_path_file = Path("/app/active_run_path/path.txt")
         active_run_path_file.parent.mkdir(parents=True, exist_ok=True)
@@ -144,6 +137,9 @@ def main():
         return 0
         
     except Exception as e:
+        # If an exception occurs before logging is set up, set it up now
+        if not logging.getLogger().handlers:
+            logger = setup_logging()
         logger.exception(f"Unhandled exception: {e}")
         return 1
 

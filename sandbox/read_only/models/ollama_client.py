@@ -20,12 +20,6 @@ import requests
 from dataclasses import dataclass
 
 # ---------------------------------------------------------
-#  Logging
-# ---------------------------------------------------------
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------
 #  Dataclasses
 # ---------------------------------------------------------
 @dataclass
@@ -119,6 +113,8 @@ class OllamaClient:
         # *freeze* – disallow changes to critical attrs after this point
         object.__setattr__(self, "_immutable", True)
 
+        self.logger = logging.getLogger("ai_research_agent.ollama_client")
+
     def __setattr__(self, name: str, value: Any) -> None:
         # prevent external mutation of critical fields once initialised
         if getattr(self, "_immutable", False) and name in {
@@ -145,7 +141,7 @@ class OllamaClient:
             # Using a simple GET to check if server is responsive
             r = self._session.get(f"{self._base_url}/api/tags", timeout=5)
             r.raise_for_status()
-            logger.info("Connected to Ollama server at %s", self._base_url)
+            self.logger.info("Connected to Ollama server at %s", self._base_url)
         except requests.RequestException as exc:
             raise ConnectionError(f"Unable to connect to Ollama at {self._base_url}") from exc
 

@@ -41,7 +41,8 @@ class RunCodeTool(BaseTool):
         """
         super().__init__()
         self.max_execution_time = max_execution_time
-        logger.info(f"RunCodeTool initialized with max execution time: {max_execution_time}")
+        self.logger = logging.getLogger("ai_research_agent.run_code")
+        self.logger.info(f"RunCodeTool initialized with max execution time: {max_execution_time}")
         
     def _run(self, code: str) -> str:
         """
@@ -61,7 +62,7 @@ class RunCodeTool(BaseTool):
         stderr_capture = StringIO()
         
         try:
-            logger.info("Running Python code snippet")
+            self.logger.info("Running Python code snippet")
             
             # Use a temporary file to store the code
             import tempfile
@@ -100,12 +101,12 @@ class RunCodeTool(BaseTool):
             if not result:
                 result = "Code executed successfully with no output."
                 
-            logger.info("Code executed successfully")
+            self.logger.info("Code executed successfully")
             return result
             
         except subprocess.TimeoutExpired:
             stderr = f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
-            logger.error(stderr)
+            self.logger.error(stderr)
             return stderr
         except Exception as e:
             # Get the traceback
@@ -123,7 +124,7 @@ class RunCodeTool(BaseTool):
             if stderr:
                 result += f"\nSTDERR (before error):\n{stderr}\n"
                 
-            logger.error(f"Error executing code: {str(e)}")
+            self.logger.error(f"Error executing code: {str(e)}")
             return result
     
     async def _arun(self, code: str) -> str:

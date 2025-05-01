@@ -46,7 +46,8 @@ class WriteScratchpadTool(BaseTool):
         """
         super().__init__()
         self.scratchpad_file = Path(scratchpad_file)
-        logger.info(f"WriteScratchpadTool initialized with scratchpad file: {scratchpad_file}")
+        self.logger = logging.getLogger("ai_research_agent.write_to_scratchpad")
+        self.logger.info(f"WriteScratchpadTool initialized with scratchpad file: {scratchpad_file}")
         
         # Create the file if it doesn't exist
         self.scratchpad_file.parent.mkdir(parents=True, exist_ok=True)
@@ -80,16 +81,16 @@ class WriteScratchpadTool(BaseTool):
             if mode.lower() == 'overwrite':
                 with open(self.scratchpad_file, 'w', encoding='utf-8') as f:
                     f.write(content)
-                logger.info(f"Successfully overwrote scratchpad")
+                self.logger.info(f"Successfully overwrote scratchpad")
                 return "Successfully overwrote scratchpad."
             else:  # Default to append mode
                 with open(self.scratchpad_file, 'a', encoding='utf-8') as f:
                     f.write(f"\n{content}" if os.path.getsize(self.scratchpad_file) > 0 else content)
-                logger.info(f"Successfully appended to scratchpad")
+                self.logger.info(f"Successfully appended to scratchpad")
                 return "Successfully appended to scratchpad."
         except Exception as e:
             error_msg = f"Error writing to scratchpad: {str(e)}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
     
     async def _arun(self, input_dict) -> str:

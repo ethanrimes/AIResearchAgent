@@ -22,8 +22,6 @@ from core.agent.tools.write_file import WriteFileTool
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
 from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
 
-logger = logging.getLogger(__name__)
-
 class HypothesisChain:
     """
     Chain responsible for generating hypotheses about ways to improve LLM reasoning.
@@ -44,13 +42,16 @@ class HypothesisChain:
         self.output_file = workspace["hypothesis"] / "hypotheses.json"
         self.scratchpad_file = workspace["scratchpad"] / "hypothesis_notes.txt"
         
+        # Initialize logger as a property
+        self.logger = logging.getLogger("ai_research_agent.hypothesis_chain")
+        
         # Initialize tools
         self.tools = self._init_tools()
         
         # Initialize agent
         self.agent = self._init_agent()
         
-        logger.info("HypothesisChain initialized")
+        self.logger.info("HypothesisChain initialized")
         
     def _init_tools(self) -> List[BaseTool]:
         """
@@ -121,7 +122,7 @@ class HypothesisChain:
         Returns:
             Dict containing the generated hypotheses.
         """
-        logger.info("Running hypothesis generation")
+        self.logger.info("Running hypothesis generation")
         
         # Create input with output file path - directive contains the main instructions
         agent_input = {
@@ -133,15 +134,15 @@ class HypothesisChain:
         
         # Check if the output file was created
         if not self.output_file.exists():
-            logger.error(f"Hypothesis agent failed to create output file: {self.output_file}")
+            self.logger.error(f"Hypothesis agent failed to create output file: {self.output_file}")
             raise FileNotFoundError(f"Hypothesis output file not found: {self.output_file}")
             
         # Load and return the generated hypotheses
         try:
             with open(self.output_file, 'r') as f:
                 hypotheses = json.load(f)
-            logger.info(f"Generated {len(hypotheses['hypotheses'])} hypotheses")
+            self.logger.info(f"Generated {len(hypotheses['hypotheses'])} hypotheses")
             return hypotheses
         except Exception as e:
-            logger.error(f"Error loading hypothesis output file: {e}")
+            self.logger.error(f"Error loading hypothesis output file: {e}")
             raise

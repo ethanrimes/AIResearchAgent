@@ -44,13 +44,15 @@ class EvaluatorChain:
         self.output_file = workspace["findings"] / "final_findings.json"
         self.scratchpad_file = workspace["scratchpad"] / "evaluator_notes.txt"
         
+        self.logger = logging.getLogger("ai_research_agent.evaluator_chain")
+
         # Initialize tools
         self.tools = self._init_tools()
         
         # Initialize agent
         self.agent = self._init_agent()
         
-        logger.info("EvaluatorChain initialized")
+        self.logger.info("EvaluatorChain initialized")
         
     def _init_tools(self) -> List[BaseTool]:
         """
@@ -129,7 +131,7 @@ class EvaluatorChain:
         Returns:
             Dict containing the final findings.
         """
-        logger.info("Running result evaluation and generating findings")
+        self.logger.info("Running result evaluation and generating findings")
         
         hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
         plan_file = self.workspace["planning"] / "experiment_plan.json"
@@ -145,15 +147,15 @@ class EvaluatorChain:
         
         # Check if the output file was created
         if not self.output_file.exists():
-            logger.error(f"Evaluator agent failed to create output file: {self.output_file}")
+            self.logger.error(f"Evaluator agent failed to create output file: {self.output_file}")
             raise FileNotFoundError(f"Findings output file not found: {self.output_file}")
             
         # Load and return the findings
         try:
             with open(self.output_file, 'r') as f:
                 findings = json.load(f)
-            logger.info("Evaluation completed and findings generated")
+            self.logger.info("Evaluation completed and findings generated")
             return findings
         except Exception as e:
-            logger.error(f"Error loading findings output file: {e}")
+            self.logger.error(f"Error loading findings output file: {e}")
             raise

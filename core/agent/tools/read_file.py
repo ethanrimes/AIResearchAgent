@@ -9,8 +9,6 @@ from typing import List, Dict, Any
 
 from langchain.tools import BaseTool
 
-logger = logging.getLogger(__name__)
-
 class ReadFileTool(BaseTool):
     """Tool for reading files from allowed directories."""
     
@@ -33,7 +31,8 @@ class ReadFileTool(BaseTool):
         """
         super().__init__()
         self.allowed_dirs = [Path(d).resolve() for d in allowed_dirs]
-        logger.info(f"ReadFileTool initialized with allowed dirs: {allowed_dirs}")
+        self.logger = logging.getLogger("ai_research_agent.read_file")
+        self.logger.info(f"ReadFileTool initialized with allowed dirs: {allowed_dirs}")
         
     def _is_path_allowed(self, file_path: Path) -> bool:
         """
@@ -77,27 +76,27 @@ class ReadFileTool(BaseTool):
         if not self._is_path_allowed(path):
             allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
             error_msg = f"Access denied: {file_path} is not in an allowed directory. Allowed directories: {allowed_dirs_str}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         if not path.exists():
             error_msg = f"File not found: {file_path}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         if not path.is_file():
             error_msg = f"Not a file: {file_path}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            logger.info(f"Successfully read file: {file_path}")
+            self.logger.info(f"Successfully read file: {file_path}")
             return content
         except Exception as e:
             error_msg = f"Error reading file {file_path}: {str(e)}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
     
     async def _arun(self, file_path: str) -> str:

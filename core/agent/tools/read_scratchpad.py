@@ -31,7 +31,8 @@ class ReadScratchpadTool(BaseTool):
         """
         super().__init__()
         self.scratchpad_file = Path(scratchpad_file)
-        logger.info(f"ReadScratchpadTool initialized with scratchpad file: {scratchpad_file}")
+        self.logger = logging.getLogger("ai_research_agent.read_scratchpad")
+        self.logger.info(f"ReadScratchpadTool initialized with scratchpad file: {scratchpad_file}")
         
         # Create the file if it doesn't exist
         self.scratchpad_file.parent.mkdir(parents=True, exist_ok=True)
@@ -51,7 +52,7 @@ class ReadScratchpadTool(BaseTool):
         """
         try:
             if not self.scratchpad_file.exists():
-                logger.info(f"Scratchpad file not found, creating empty file: {self.scratchpad_file}")
+                self.logger.info(f"Scratchpad file not found, creating empty file: {self.scratchpad_file}")
                 with open(self.scratchpad_file, 'w', encoding='utf-8') as f:
                     f.write("")
                 return "Scratchpad is empty."
@@ -62,11 +63,11 @@ class ReadScratchpadTool(BaseTool):
             if not content:
                 return "Scratchpad is empty."
                 
-            logger.info(f"Successfully read scratchpad")
+            self.logger.info(f"Successfully read scratchpad")
             return content
         except Exception as e:
             error_msg = f"Error reading scratchpad: {str(e)}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
     
     async def _arun(self, query: str = "") -> str:

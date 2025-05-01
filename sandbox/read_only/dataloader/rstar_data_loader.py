@@ -16,7 +16,7 @@ class rStarDataLoader:
             logger: Optional logger instance (will create one if not provided)
         """
         self.dataset_path = os.environ.get("DATASET_PATH")
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("ai_research_agent.rstar_data_loader")
     
     def load(self) -> List[Dict[str, Any]]:
         """

@@ -26,13 +26,6 @@ from core.agent.chains.evaluator_chain import EvaluatorChain
 # Import utility functions
 from core.utils.directive_utils import load_directive
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 class Agent:
     """
     Main agent class that orchestrates the research process.
@@ -48,6 +41,8 @@ class Agent:
         self.config = self._load_config(config_path)
         self.run_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         self.workspace = self._setup_workspace()
+
+        self.logger = logging.getLogger("ai_research_agent.agent")
         
         # Initialize the LLM for the agents
         self.llm = self._init_llm()
@@ -55,9 +50,9 @@ class Agent:
         # Initialize the agent chains
         self.chains = self._init_chains()
         
-        logger.info(f"Agent initialized with run ID: {self.run_id}")
-        logger.info(f"Using agent model: {self.config['agent_model']}")
-        logger.info(f"Using reasoner model: {self.config['reasoner_model']}")
+        self.logger.info(f"Agent initialized with run ID: {self.run_id}")
+        self.logger.info(f"Using agent model: {self.config['agent_model']}")
+        self.logger.info(f"Using reasoner model: {self.config['reasoner_model']}")
         
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """
@@ -72,10 +67,10 @@ class Agent:
         try:
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
-            logger.info(f"Loaded configuration from {config_path}")
+            self.logger.info(f"Loaded configuration from {config_path}")
             return config
         except Exception as e:
-            logger.error(f"Error loading configuration: {e}")
+            self.logger.error(f"Error loading configuration: {e}")
             raise
             
     def _setup_workspace(self) -> Dict[str, Path]:
@@ -94,7 +89,7 @@ class Agent:
             from core.utils.directive_utils import get_active_run_path
             writable_dir = get_active_run_path()
         except (FileNotFoundError, ValueError) as e:
-            logger.warning(f"Could not get active run path: {e}")
+            self.logger.warning(f"Could not get active run path: {e}")
             # Fallback to the old behavior
             writable_dir = base_dir / "sandbox" / "writable" / f"run_{self.run_id}"
         
@@ -115,7 +110,7 @@ class Agent:
             "dataset": Path(self.config["dataset_path"])
         }
         
-        logger.info(f"Workspace set up at {writable_dir}")
+        self.logger.info(f"Workspace set up at {writable_dir}")
         return workspace
         
     def _init_llm(self) -> ChatOpenAI:
@@ -163,7 +158,7 @@ class Agent:
             )
         }
         
-        logger.info("Agent chains initialized")
+        self.logger.info("Agent chains initialized")
         return chains
         
     def run(self) -> Dict[str, Any]:
@@ -173,40 +168,40 @@ class Agent:
         Returns:
             Dict containing the results of the run.
         """
-        logger.info("Starting agent run")
+        self.logger.info("Starting agent run")
         start_time = time.time()
         max_duration = self.config["max_run_duration"]
         
         try:
             # Step 1: Generate hypotheses
-            logger.info("Running hypothesis generation")
+            self.logger.info("Running hypothesis generation")
             hypothesis_result = self.chains["hypothesis"].run()
             
             # Check if we've exceeded the max duration
             if time.time() - start_time > max_duration:
-                logger.warning("Maximum run duration exceeded after hypothesis generation")
+                self.logger.warning("Maximum run duration exceeded after hypothesis generation")
                 return {"status": "timeout", "step": "hypothesis"}
                 
             # Step 2: Plan the experiment
-            logger.info("Running experiment planning")
+            self.logger.info("Running experiment planning")
             plan_result = self.chains["planner"].run(hypothesis_result)
             
             # Check if we've exceeded the max duration
             if time.time() - start_time > max_duration:
-                logger.warning("Maximum run duration exceeded after experiment planning")
+                self.logger.warning("Maximum run duration exceeded after experiment planning")
                 return {"status": "timeout", "step": "planning"}
                 
             # Step 3: Implement and run the experiment
-            logger.info("Running experiment implementation and execution")
+            self.logger.info("Running experiment implementation and execution")
             experiment_result = self.chains["experiment"].run(plan_result)
             
             # Check if we've exceeded the max duration
             if time.time() - start_time > max_duration:
-                logger.warning("Maximum run duration exceeded after experiment execution")
+                self.logger.warning("Maximum run duration exceeded after experiment execution")
                 return {"status": "timeout", "step": "experiment"}
                 
             # Step 4: Evaluate the results
-            logger.info("Running result evaluation")
+            self.logger.info("Running result evaluation")
             evaluation_result = self.chains["evaluator"].run(experiment_result)
             
             # Compile the final results
@@ -221,11 +216,11 @@ class Agent:
                 "evaluation": evaluation_result
             }
             
-            logger.info(f"Agent run completed successfully in {elapsed_time:.2f} seconds")
+            self.logger.info(f"Agent run completed successfully in {elapsed_time:.2f} seconds")
             return results
             
         except Exception as e:
-            logger.error(f"Error during agent run: {e}", exc_info=True)
+            self.logger.error(f"Error during agent run: {e}", exc_info=True)
             elapsed_time = time.time() - start_time
             
             return {

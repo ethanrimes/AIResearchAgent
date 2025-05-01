@@ -10,8 +10,6 @@ from typing import Dict, Any
 
 from langchain.tools import BaseTool
 
-logger = logging.getLogger(__name__)
-
 class RunBashTool(BaseTool):
     """Tool for running bash commands in a specified working directory."""
     
@@ -42,9 +40,10 @@ class RunBashTool(BaseTool):
         super().__init__()
         self.working_dir = Path(working_dir).resolve()
         self.output_dir = Path(output_dir).resolve() if output_dir else None
-        logger.info(f"RunBashTool initialized with working directory: {working_dir}")
+        self.logger = logging.getLogger("ai_research_agent.run_bash")
+        self.logger.info(f"RunBashTool initialized with working directory: {working_dir}")
         if output_dir:
-            logger.info(f"RunBashTool output directory: {output_dir}")
+            self.logger.info(f"RunBashTool output directory: {output_dir}")
         
         # Create the directories if they don't exist
         self.working_dir.mkdir(parents=True, exist_ok=True)
@@ -65,7 +64,7 @@ class RunBashTool(BaseTool):
             return "ERROR: No command provided."
             
         try:
-            logger.info(f"Running bash command: {command}")
+            self.logger.info(f"Running bash command: {command}")
             
             # Set environment variables to restrict output
             env = os.environ.copy()
@@ -101,7 +100,7 @@ class RunBashTool(BaseTool):
                         f.write(f"STDERR:\n{stderr}\n")
             
             if return_code == 0:
-                logger.info(f"Command executed successfully with return code {return_code}")
+                self.logger.info(f"Command executed successfully with return code {return_code}")
                 if not stdout and not stderr:
                     return "Command executed successfully with no output."
                 output = ""
@@ -111,7 +110,7 @@ class RunBashTool(BaseTool):
                     output += f"STDERR:\n{stderr}\n"
                 return output
             else:
-                logger.warning(f"Command failed with return code {return_code}")
+                self.logger.warning(f"Command failed with return code {return_code}")
                 output = f"Command failed with return code {return_code}\n"
                 if stdout:
                     output += f"STDOUT:\n{stdout}\n"
@@ -120,10 +119,10 @@ class RunBashTool(BaseTool):
                 return output
                 
         except subprocess.TimeoutExpired:
-            logger.error("Command timed out after 600 seconds")
+            self.logger.error("Command timed out after 600 seconds")
             return "ERROR: Command timed out after 600 seconds."
         except Exception as e:
-            logger.error(f"Error running command: {str(e)}")
+            self.logger.error(f"Error running command: {str(e)}")
             return f"ERROR: Failed to run command: {str(e)}"
     
     async def _arun(self, command: str) -> str:

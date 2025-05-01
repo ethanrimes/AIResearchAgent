@@ -37,7 +37,8 @@ class WriteFileTool(BaseTool):
         """
         super().__init__()
         self.allowed_dirs = [Path(d).resolve() for d in allowed_dirs]
-        logger.info(f"WriteFileTool initialized with allowed dirs: {allowed_dirs}")
+        self.logger = logging.getLogger("ai_research_agent.write_file")
+        self.logger.info(f"WriteFileTool initialized with allowed dirs: {allowed_dirs}")
         
     def _is_path_allowed(self, file_path: Path) -> bool:
         """
@@ -80,7 +81,7 @@ class WriteFileTool(BaseTool):
         # Validate input
         if not isinstance(input_dict, dict):
             error_msg = f"Invalid input: expected dictionary, got {type(input_dict)}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         file_path = input_dict.get('file_path')
@@ -88,12 +89,12 @@ class WriteFileTool(BaseTool):
         
         if not file_path:
             error_msg = "Missing required key 'file_path' in input"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         if content is None:  # Allow empty string but not None
             error_msg = "Missing required key 'content' in input"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         path = Path(file_path)
@@ -101,7 +102,7 @@ class WriteFileTool(BaseTool):
         if not self._is_path_allowed(path):
             allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
             error_msg = f"Access denied: {file_path} is not in an allowed directory. Allowed directories: {allowed_dirs_str}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
             
         # Create parent directories if they don't exist
@@ -110,11 +111,11 @@ class WriteFileTool(BaseTool):
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            logger.info(f"Successfully wrote to file: {file_path}")
+            self.logger.info(f"Successfully wrote to file: {file_path}")
             return f"Successfully wrote to file: {file_path}"
         except Exception as e:
             error_msg = f"Error writing to file {file_path}: {str(e)}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
     
     async def _arun(self, input_dict: Dict[str, str]) -> str:

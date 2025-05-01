@@ -43,6 +43,8 @@ class PlannerChain:
         self.directive = directive
         self.output_file = workspace["planning"] / "experiment_plan.json"
         self.scratchpad_file = workspace["scratchpad"] / "planner_notes.txt"
+
+        self.logger = logging.getLogger("ai_research_agent.planner_chain")
         
         # Initialize tools
         self.tools = self._init_tools()
@@ -50,7 +52,7 @@ class PlannerChain:
         # Initialize agent
         self.agent = self._init_agent()
         
-        logger.info("PlannerChain initialized")
+        self.logger.info("PlannerChain initialized")
         
     def _init_tools(self) -> List[BaseTool]:
         """
@@ -125,7 +127,7 @@ class PlannerChain:
         Returns:
             Dict containing the experiment plan.
         """
-        logger.info("Running experiment planning")
+        self.logger.info("Running experiment planning")
         
         hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
         
@@ -139,15 +141,15 @@ class PlannerChain:
         
         # Check if the output file was created
         if not self.output_file.exists():
-            logger.error(f"Planner agent failed to create output file: {self.output_file}")
+            self.logger.error(f"Planner agent failed to create output file: {self.output_file}")
             raise FileNotFoundError(f"Planner output file not found: {self.output_file}")
             
         # Load and return the generated plan
         try:
             with open(self.output_file, 'r') as f:
                 plan = json.load(f)
-            logger.info("Generated experiment plan")
+            self.logger.info("Generated experiment plan")
             return plan
         except Exception as e:
-            logger.error(f"Error loading planner output file: {e}")
+            self.logger.error(f"Error loading planner output file: {e}")
             raise
