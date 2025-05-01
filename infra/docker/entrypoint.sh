@@ -1,8 +1,20 @@
 #!/bin/bash
 set -e
 
-# Set default timeout (in seconds) for experiment execution
+# Set default timeout
 : "${EXPERIMENT_TIMEOUT:=300}"
+
+# Generate timestamped run directory
+timestamp=$(date +"%Y-%m-%dT%H-%M-%S")
+run_path="/app/sandbox/writable/run_$timestamp"
+
+# Export the run path as an environment variable
+export EXPERIMENT_RUN_PATH="$run_path"
+
+echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
+
+# Write to a file so Python can read it too (if not passed through env)
+echo "$EXPERIMENT_RUN_PATH" > /app/active_run_path.txt
 
 # Print startup information
 echo "Starting AI Research Agent with experiment timeout: ${EXPERIMENT_TIMEOUT}s"
@@ -20,26 +32,32 @@ else
     echo "✓ Read access to /app/sandbox/read_only confirmed"
 fi
 
-# Verify write access to writable directories
-if [ ! -w "/app/sandbox/writable/experiments" ]; then
-    echo "Error: Cannot write to /app/sandbox/writable/experiments directory!"
+# Verify read access to data directory
+if [ ! -r "/app/data" ]; then
+    echo "Error: Cannot read from /app/data directory!"
     exit 1
 else
-    echo "✓ Write access to /app/sandbox/writable/experiments confirmed"
+    echo "✓ Read access to /app/data confirmed"
 fi
 
-if [ ! -w "/app/sandbox/writable/results" ]; then
-    echo "Error: Cannot write to /app/sandbox/writable/results directory!"
+# Create subdirectories in the run directory
+mkdir -p "$EXPERIMENT_RUN_PATH"/{planning,experiment,results,scratchpad}
+
+# Verify write access to the specific run directory
+if [ ! -w "$EXPERIMENT_RUN_PATH" ]; then
+    echo "Error: Cannot write to $EXPERIMENT_RUN_PATH directory!"
     exit 1
 else
-    echo "✓ Write access to /app/sandbox/writable/results confirmed"
+    echo "✓ Write access to $EXPERIMENT_RUN_PATH confirmed"
 fi
 
-if [ ! -w "/app/sandbox/writable/scratchpad" ]; then
-    echo "Error: Cannot write to /app/sandbox/writable/scratchpad directory!"
+# Verify we CANNOT write to the parent writable directory (should be read-only)
+if touch /app/sandbox/writable/test_write.txt 2>/dev/null; then
+    echo "Error: Unexpected write access to /app/sandbox/writable!"
+    rm -f /app/sandbox/writable/test_write.txt
     exit 1
 else
-    echo "✓ Write access to /app/sandbox/writable/scratchpad confirmed"
+    echo "✓ Confirmed /app/sandbox/writable is read-only as expected"
 fi
 
 # Test network connectivity to OpenAI API

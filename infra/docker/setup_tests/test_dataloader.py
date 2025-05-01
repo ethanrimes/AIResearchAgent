@@ -4,8 +4,8 @@ from core.rstar_data_loader import rStarDataLoader
 
 @pytest.fixture
 def loader():
-    # we mount amc23_test.json under /app/sandbox/read_only/data
-    path = "/app/sandbox/read_only/data/amc23_test.json"
+    # Data is now located in /app/data/rstar directory
+    path = "/app/data/rstar/amc23_test.json"
     return rStarDataLoader(path)
 
 def test_load_amc23(loader):

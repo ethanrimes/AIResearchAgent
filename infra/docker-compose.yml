@@ -16,20 +16,23 @@ services:
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - EXPERIMENT_TIMEOUT=${EXPERIMENT_TIMEOUT:-300}
+      - EXPERIMENT_RUN_PATH=${EXPERIMENT_RUN_PATH}
     volumes:
       # Mount core code as read-only
       - ../core:/app/core:ro
+      # Mount data directory as read-only
+      - ../data:/app/data:ro
       # Mount read_only directory with read-only permissions
       - ../sandbox/read_only:/app/sandbox/read_only:ro
-      # Mount writable directories with read-write permissions
-      - ../sandbox/writable/experiments:/app/sandbox/writable/experiments:rw
-      - ../sandbox/writable/results:/app/sandbox/writable/results:rw
-      - ../sandbox/writable/scratchpad:/app/sandbox/writable/scratchpad:rw
+      # Mount writable directories with read-only permissions by default
+      - ../sandbox/writable:/app/sandbox/writable:ro
     read_only: true
     tmpfs:
       - /tmp
       - /run
       - /var/log
+      # Add a tmpfs mount for the specific run directory that will be created by entrypoint.sh
+      - ${EXPERIMENT_RUN_PATH:-/app/sandbox/writable/tmp_run}:exec,rw,size=500m
     security_opt:
       - no-new-privileges:true
     cap_drop:

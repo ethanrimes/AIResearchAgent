@@ -6,24 +6,29 @@ RUN groupadd -r agent && useradd -r -g agent agent
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY infra/docker/requirements.txt .
+# --------------------------------------------
+# STEP 1: Copy and install dependencies FIRST
+# This is cached if requirements.txt doesn’t change
+# --------------------------------------------
+COPY infra/docker/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# --------------------------------------------
+# STEP 2: Copy the rest of the app (after pip)
+# This avoids invalidating the previous layer unnecessarily
+# --------------------------------------------
+COPY . /app
 
-# Copy entrypoint script
-COPY infra/docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copy entrypoint script explicitly (already included by COPY .)
+# But still make it executable
+RUN chmod +x /app/infra/docker/entrypoint.sh
 
-# Create necessary directories for the container
-RUN mkdir -p /app/sandbox/writable /app/sandbox/read_only
-
-# Set proper permissions
-RUN chown -R agent:agent /app/sandbox/writable
+# Create writable and read-only sandbox dirs
+RUN mkdir -p /app/sandbox/writable /app/sandbox/read_only \
+    && chown -R agent:agent /app/sandbox/writable
 
 # Switch to non-root user
 USER agent
 
 # Set entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/app/infra/docker/entrypoint.sh"]
