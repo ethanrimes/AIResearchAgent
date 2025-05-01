@@ -1,0 +1,45 @@
+{
+    "experiment_plan": {
+      "title": "Comparative Analysis of LLM Mathematical Reasoning Enhancement Techniques",
+      "description": "A systematic evaluation of four distinct techniques for improving mathematical reasoning in LLMs, using the Ollama qwen3:1.7b model and the AIME 2024 test dataset.",
+      "baseline": {
+        "description": "Standard approach where the model is given the problem statement with a simple instruction to solve it step-by-step.",
+        "implementation": "The model will be prompted with 'Solve this math problem step-by-step:' followed by the problem statement."
+      },
+      "hypotheses_testing": [
+        {
+          "hypothesis_id": "H1",
+          "implementation": "The model will be prompted with specific instructions to decompose problems into numbered steps with defined purposes (e.g., 'Step 1: Identify variables and what we're solving for. Step 2: List relevant formulas or theorems. Step 3: Set up equations...') and then proceed through each step systematically.",
+          "expected_outcome": "Improved accuracy on complex multi-step problems, particularly those requiring sequential reasoning. Errors should decrease in the middle steps of long solutions."
+        },
+        {
+          "hypothesis_id": "H2",
+          "implementation": "The model will be prompted to solve each problem using two different methods (e.g., algebraic vs. geometric approaches for geometry problems, or direct calculation vs. using a different formula for algebra problems), then compare the results and resolve any discrepancies before providing a final answer.",
+          "expected_outcome": "Higher overall accuracy, especially on problems with calculation-heavy solutions. The approach should be particularly effective for problems that can be solved through multiple methods."
+        },
+        {
+          "hypothesis_id": "H3",
+          "implementation": "The model will be instructed to start by explicitly listing all constraints and conditions from the problem in a structured format (e.g., 'Given: x > 0, y is an integer, etc.') and refer back to this list during the solution process.",
+          "expected_outcome": "Fewer errors related to missing or misapplying problem constraints. Performance should improve on problems with multiple conditions or constraints."
+        },
+        {
+          "hypothesis_id": "H4",
+          "implementation": "The model will be prompted to track and verify units/dimensions throughout the solution process, noting the units of each quantity and confirming dimensional consistency at each step of the calculation.",
+          "expected_outcome": "Reduced computational and conceptual errors, particularly in physics-related problems or those involving different units and conversions."
+        }
+      ],
+      "evaluation": {
+        "metrics": [
+          "Accuracy (percentage of correct final answers)",
+          "Reasoning Quality (assessed by examining the solution steps)",
+          "Error Types (categorized as computational, conceptual, or constraint-related)",
+          "Execution Time (time taken to complete each problem)"
+        ],
+        "methodology": "Each approach (baseline and four hypotheses) will be tested on the entire AIME 2024 test dataset. For each problem, we'll record whether the final answer is correct, analyze the solution for reasoning quality, categorize any errors, and measure execution time. We'll also conduct a more detailed analysis on a subset of 10 diverse problems to gain qualitative insights into each approach's strengths and weaknesses."
+      },
+      "analysis_plan": "We will compare the performance of each approach against the baseline using statistical tests for significance. We'll analyze performance patterns across different problem types to identify which approaches work best for which kinds of problems. We'll also perform a qualitative analysis of the solution processes to understand how each technique affects the reasoning patterns of the model."
+    },
+    "meta": {
+      "timestamp": "2025-05-01T13:45:30"
+    }
+  }
