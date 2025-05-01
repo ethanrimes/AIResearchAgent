@@ -76,10 +76,7 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
         formatted += f"# Constraints\n{constraints}\n\n"
         
     if instructions:
-        formatted += "# Instructions\n"
-        for i, instruction in enumerate(instructions, 1):
-            formatted += f"{i}. {instruction}\n"
-        formatted += "\n"
+        formatted += f"# Instructions\n{instructions}\n\n" 
         
     if output_format:
         formatted += f"# Output Format\n{output_format}\n\n"
