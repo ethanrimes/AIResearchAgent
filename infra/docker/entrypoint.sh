@@ -27,7 +27,7 @@ if [[ ! -r "$readonly_ro" ]];   then echo "❌ Cannot read $readonly_ro";   exit
 if [[ ! -r "$readonly_data" ]]; then echo "❌ Cannot read $readonly_data"; exit 1; else echo "✓ Read access to $readonly_data confirmed"; fi
 
 # Create run sub-dirs (the bind mount itself must already exist)
-mkdir -p "${EXPERIMENT_RUN_PATH}"/{planning,experiment,results,scratchpad}
+mkdir -p "${EXPERIMENT_RUN_PATH}"/{hypothesis,planning,experiment,results,findings,scratchpad}
 if [[ ! -w "$EXPERIMENT_RUN_PATH" ]]; then
   echo "❌ Cannot write to $EXPERIMENT_RUN_PATH"; exit 1
 else

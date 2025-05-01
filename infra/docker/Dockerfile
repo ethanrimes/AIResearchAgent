@@ -30,5 +30,7 @@ RUN mkdir -p /app/sandbox/writable /app/sandbox/read_only \
 # --- Use non-root user ---
 USER agent
 
+ENV PYTHONPATH=/app
+
 # --- Set entrypoint ---
 ENTRYPOINT ["/app/infra/docker/entrypoint.sh"]

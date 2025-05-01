@@ -37,7 +37,7 @@ def test_run_dir_writable():
     assert os.path.isdir(run_dir), f"Run directory {run_dir} does not exist"
     
     # Test writing to subdirectories
-    for sub in ("planning", "experiment", "results", "scratchpad"):
+    for sub in ("hypothesis", "planning", "experiment", "results", "findings", "scratchpad"):
         path = os.path.join(run_dir, sub)
         assert os.path.isdir(path), f"Subdirectory {path} does not exist"
         

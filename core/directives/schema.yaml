@@ -1,0 +1,39 @@
+type: map
+required: true
+mapping:
+  name:
+    type: str
+    required: true
+    description: "Short title of the directive or phase."
+  description:
+    type: str
+    required: true
+    description: "Narrative instruction describing the agent's purpose."
+  role:
+    type: str
+    required: true
+    description: "Defines the role or persona of the agent (e.g. researcher, evaluator)."
+  objectives:
+    type: seq
+    required: true
+    sequence:
+      - type: str
+    description: "List of specific goals the agent must accomplish."
+  inputs:
+    type: seq
+    required: false
+    sequence:
+      - type: str
+    description: "Optional list of input references such as model or dataset identifiers."
+  constraints:
+    type: seq
+    required: false
+    sequence:
+      - type: str
+    description: "Optional list of constraints or boundaries on agent behavior."
+  success_criteria:
+    type: seq
+    required: false
+    sequence:
+      - type: str
+    description: "Optional list of criteria for judging a successful output."

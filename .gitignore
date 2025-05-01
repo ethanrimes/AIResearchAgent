@@ -2,3 +2,9 @@ venvs/
 agent-venv-311/
 myagent-env/
 .env
+
+# Ignore write test files
+**/entrypoint_write_test.txt
+
+# Ignore all log files
+**/*.log

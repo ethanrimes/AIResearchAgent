@@ -170,7 +170,7 @@ class EmbeddingParameters:
 class OllamaClient:
     """Client for interacting with the Ollama server."""
     
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, default_model: Optional[str] = None):
         """
         Initialize the Ollama client.
         
@@ -178,8 +178,10 @@ class OllamaClient:
             base_url: Base URL for the Ollama server.
                       Defaults to OLLAMA_BASE_URL environment variable
                       or http://host.docker.internal:11434 if not set.
+            default_model: Default model to use for generations if not specified.
         """
         self.base_url = base_url or os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+        self.default_model = default_model
         self.session = requests.Session()
         
         # Verify connection to Ollama server
@@ -681,44 +683,3 @@ class OllamaClient:
         except Exception as e:
             logger.error(f"Failed to get metrics for model {model_name}: {e}")
             raise
-
-
-# Example usage
-def test_ollama_client():
-    """Test the Ollama client with a simple generation."""
-    client = OllamaClient()
-    
-    # List available models
-    models = client.list_models()
-    print(f"Available models: {len(models)}")
-    for model in models:
-        print(f"  - {model['name']}")
-    
-    # Test generation with Qwen model if available
-    qwen_models = [m for m in models if "qwen" in m["name"].lower()]
-    if qwen_models:
-        model_name = qwen_models[0]["name"]
-        print(f"\nTesting generation with {model_name}...")
-        
-        params = GenerationParameters(
-            model=model_name,
-            prompt="Explain how test-time compute optimization works in LLMs in one paragraph.",
-            temperature=0.7,
-            num_predict=100
-        )
-        
-        try:
-            result = client.generate(params)
-            print("\nGeneration result:")
-            print(f"Response: {result['response']}")
-            print(f"Generated in {result['metrics']['inference_time']:.2f} seconds")
-            print(f"Tokens per second: {result['metrics']['tokens_per_second']:.2f}")
-        except Exception as e:
-            print(f"Generation test failed: {e}")
-    else:
-        print("\nNo Qwen models found for testing.")
-
-
-if __name__ == "__main__":
-    # This will only run when the file is executed directly
-    test_ollama_client()
