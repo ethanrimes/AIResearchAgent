@@ -4,7 +4,7 @@ set -euo pipefail
 # -------------------------------------------------
 # 0.  Read environment variables (with defaults)
 # -------------------------------------------------
-: "${EXPERIMENT_TIMEOUT:=300}"
+: "${EXPERIMENT_TIMEOUT:=500}"
 : "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
 echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
@@ -27,7 +27,7 @@ if [[ ! -r "$readonly_ro" ]];   then echo "❌ Cannot read $readonly_ro";   exit
 if [[ ! -r "$readonly_data" ]]; then echo "❌ Cannot read $readonly_data"; exit 1; else echo "✓ Read access to $readonly_data confirmed"; fi
 
 # Create run sub-dirs (the bind mount itself must already exist)
-mkdir -p "${EXPERIMENT_RUN_PATH}"/{hypothesis,planning,experiment,results,findings,scratchpad}
+mkdir -p "${EXPERIMENT_RUN_PATH}"/{hypothesis,planning,experiment,results,findings,scratchpad,logs}
 if [[ ! -w "$EXPERIMENT_RUN_PATH" ]]; then
   echo "❌ Cannot write to $EXPERIMENT_RUN_PATH"; exit 1
 else
@@ -103,8 +103,8 @@ echo "✓ File written to ${EXPERIMENT_RUN_PATH}/entrypoint_write_test.txt"
 # -------------------------------------------------
 # 5.  (Optional) start the main experiment
 # -------------------------------------------------
-# echo "Executing experiment script with timeout ${EXPERIMENT_TIMEOUT}s ..."
-# timeout "${EXPERIMENT_TIMEOUT}" python /app/core/scripts/run_experiment.py
+echo "Executing experiment script with timeout ${EXPERIMENT_TIMEOUT}s ..."
+timeout "${EXPERIMENT_TIMEOUT}" python /app/core/scripts/run_experiment.py
 
 # Keep the container alive if no experiment is launched
 echo "Container initialisation finished."

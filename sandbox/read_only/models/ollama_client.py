@@ -1,5 +1,5 @@
 """
-Immutable client for querying an Ollama server running on the host.
+Immutable client for text generation with an Ollama server.
 
 All requests are forced to use:
   • the base-URL chosen at construction time
@@ -18,7 +18,6 @@ from typing import Dict, List, Any, Optional, Union, Generator
 
 import requests
 from dataclasses import dataclass
-from enum import Enum
 
 # ---------------------------------------------------------
 #  Logging
@@ -27,21 +26,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
-#  Enumerations & Dataclasses (unchanged except docstrings)
+#  Dataclasses
 # ---------------------------------------------------------
-class OllamaEndpoints(Enum):
-    GENERATE    = "/api/generate"
-    CHAT        = "/api/chat"
-    EMBEDDINGS  = "/api/embeddings"
-    TAGS        = "/api/tags"
-    SHOW        = "/api/show"
-    PULL        = "/api/pull"
-    PUSH        = "/api/push"
-    CREATE      = "/api/create"
-    DELETE      = "/api/delete"
-    COPY        = "/api/copy"
-
-
 @dataclass
 class GenerationParameters:
     """
@@ -99,61 +85,19 @@ class GenerationParameters:
         return d
 
 
-@dataclass
-class ChatMessage:
-    role: str
-    content: str
-    images: Optional[List[str]] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d = {"role": self.role, "content": self.content}
-        if self.images:
-            d["images"] = self.images
-        return d
-
-
-@dataclass
-class ChatParameters:
-    model: str
-    messages: List[ChatMessage]
-    stream: bool = False
-    format: Optional[str] = None
-    options: Optional[Dict[str, Any]] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
-            "messages": [m.to_dict() for m in self.messages],
-        }
-        if self.stream:   d["stream"] = True
-        if self.format:   d["format"] = self.format
-        if self.options:  d["options"] = self.options
-        return d
-
-
-@dataclass
-class EmbeddingParameters:
-    model: str
-    prompt: str
-    options: Optional[Dict[str, Any]] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d = {"prompt": self.prompt}
-        if self.options:
-            d["options"] = self.options
-        return d
-
-
 # ---------------------------------------------------------
 #  Main Client
 # ---------------------------------------------------------
 class OllamaClient:
     """
-    Immutable Ollama API client.
+    Immutable Ollama API client for text generation.
 
     After construction the base URL and the default model **cannot** be
     modified from the outside, and every request sent through this client
     will automatically contain these enforced defaults.
     """
+    # Endpoint for generation
+    GENERATE_ENDPOINT = "/api/generate"
 
     # ---------- construction & immutability helpers ----------
     def __init__(self,
@@ -193,23 +137,19 @@ class OllamaClient:
         return self._default_model
 
     # ---------- internal helpers ----------
-    def _get_url(self, endpoint: Union[str, OllamaEndpoints]) -> str:
-        path = endpoint.value if isinstance(endpoint, OllamaEndpoints) else endpoint
-        return f"{self._base_url}{path}"
+    def _get_url(self, endpoint: str) -> str:
+        return f"{self._base_url}{endpoint}"
 
     def _check_connection(self) -> None:
         try:
-            r = self._session.get(self._get_url(OllamaEndpoints.TAGS), timeout=5)
+            # Using a simple GET to check if server is responsive
+            r = self._session.get(f"{self._base_url}/api/tags", timeout=5)
             r.raise_for_status()
             logger.info("Connected to Ollama server at %s", self._base_url)
         except requests.RequestException as exc:
             raise ConnectionError(f"Unable to connect to Ollama at {self._base_url}") from exc
 
-    def _enforce_defaults(self,
-                          params: Union[GenerationParameters,
-                                        ChatParameters,
-                                        EmbeddingParameters,
-                                        Dict[str, Any]]) -> Dict[str, Any]:
+    def _enforce_defaults(self, params: Union[GenerationParameters, Dict[str, Any]]) -> Dict[str, Any]:
         """
         Convert `params` to a dict and inject the enforced default model.
         """
@@ -221,34 +161,35 @@ class OllamaClient:
         return data
 
     def _make_request(self,
-                      method: str,
-                      endpoint: OllamaEndpoints,
-                      data: Optional[Dict[str, Any]] = None,
+                      endpoint: str,
+                      data: Dict[str, Any],
                       *,
                       stream: bool = False,
                       timeout: Optional[float] = None
                       ) -> Union[requests.Response, Dict[str, Any]]:
         url = self._get_url(endpoint)
 
-        if method == "GET":
-            resp = self._session.get(url, timeout=timeout)
-        elif method == "POST":
-            if stream:
-                return self._session.post(url, json=data, stream=True, timeout=timeout)
-            resp = self._session.post(url, json=data, timeout=timeout)
-        elif method == "DELETE":
-            resp = self._session.delete(url, json=data, timeout=timeout)
-        else:
-            raise ValueError(f"Unsupported HTTP method: {method}")
-
+        if stream:
+            return self._session.post(url, json=data, stream=True, timeout=timeout)
+        
+        resp = self._session.post(url, json=data, timeout=timeout)
         resp.raise_for_status()
-        return resp.json() if resp.content and not stream else resp
+        return resp.json() if resp.content else resp
 
-    # ---------- public high-level API ----------
-    # Text generation --------------------------------------------------
+    # ---------- public API ----------
     def generate(self,
                  params: Union[GenerationParameters, Dict[str, Any]],
                  timeout: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Generate text using the default model.
+        
+        Args:
+            params: Generation parameters (the model will be overridden)
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Response dictionary containing the generated text and metrics
+        """
         data = self._enforce_defaults(params)
 
         if data.get("stream"):
@@ -258,8 +199,7 @@ class OllamaClient:
             }
 
         t0 = time.time()
-        resp = self._make_request("POST", OllamaEndpoints.GENERATE, data,
-                                  timeout=timeout)
+        resp = self._make_request(self.GENERATE_ENDPOINT, data, timeout=timeout)
         elapsed = time.time() - t0
         resp["metrics"] = {
             "inference_time": elapsed,
@@ -272,11 +212,21 @@ class OllamaClient:
                         params: Union[GenerationParameters, Dict[str, Any]],
                         timeout: Optional[float] = None
                         ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Stream text generation using the default model.
+        
+        Args:
+            params: Generation parameters (the model will be overridden)
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Generator yielding response chunks as they become available
+        """
         data = self._enforce_defaults(params)
         data["stream"] = True
 
-        resp = self._make_request("POST", OllamaEndpoints.GENERATE, data,
-                                  stream=True, timeout=timeout)
+        resp = self._make_request(self.GENERATE_ENDPOINT, data,
+                                 stream=True, timeout=timeout)
 
         t0 = time.time()
         tokens = 0
@@ -293,71 +243,13 @@ class OllamaClient:
             yield chunk
             if chunk.get("done"):
                 break
-
-    # Chat --------------------------------------------------------------
-    def chat(self,
-             params: Union[ChatParameters, Dict[str, Any]],
-             timeout: Optional[float] = None) -> Dict[str, Any]:
-        data = self._enforce_defaults(params)
-
-        if data.get("stream"):
-            return {"stream": self.chat_stream(data, timeout=timeout)}
-
-        t0 = time.time()
-        resp = self._make_request("POST", OllamaEndpoints.CHAT, data,
-                                  timeout=timeout)
-        elapsed = time.time() - t0
-        content = resp.get("message", {}).get("content", "")
-        resp["metrics"] = {
-            "inference_time": elapsed,
-            "tokens_per_second": len(content.split()) / elapsed if elapsed else 0
-        }
-        return resp
-
-    def chat_stream(self,
-                    params: Union[ChatParameters, Dict[str, Any]],
-                    timeout: Optional[float] = None
-                    ) -> Generator[Dict[str, Any], None, None]:
-        data = self._enforce_defaults(params)
-        data["stream"] = True
-
-        resp = self._make_request("POST", OllamaEndpoints.CHAT, data,
-                                  stream=True, timeout=timeout)
-
-        t0 = time.time()
-        tokens = 0
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            chunk = json.loads(line)
-            tokens += 1
-            elapsed = time.time() - t0
-            chunk["metrics"] = {
-                "inference_time": elapsed,
-                "tokens_per_second": tokens / elapsed if elapsed else 0
-            }
-            yield chunk
-            if chunk.get("done"):
-                break
-
-    # Embeddings --------------------------------------------------------
-    def get_embeddings(self,
-                       params: Union[EmbeddingParameters, Dict[str, Any]],
-                       timeout: Optional[float] = None) -> Dict[str, Any]:
-        data = self._enforce_defaults(params)
-        return self._make_request("POST", OllamaEndpoints.EMBEDDINGS,
-                                  data, timeout=timeout)
-
-    # Misc --------------------------------------------------------------
-    def show_model_info(self, timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Show metadata for the default model."""
-        data = {"name": self._default_model}
-        return self._make_request("POST", OllamaEndpoints.SHOW,
-                                  data, timeout=timeout)
 
     def get_model_metrics(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """
         Quick performance probe for the default model.
+        
+        Returns:
+            Dictionary with performance metrics
         """
         gen_params = GenerationParameters(
             model=self._default_model,
