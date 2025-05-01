@@ -1,0 +1,47 @@
+services:
+  ai-agent:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile
+    container_name: ai-research-agent
+    environment:
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT}
+      - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - EXPERIMENT_TIMEOUT=${EXPERIMENT_TIMEOUT:-300}
+    volumes:
+      # Mount core code as read-only
+      - ../core:/app/core:ro
+      # Mount read_only directory with read-only permissions
+      - ../sandbox/read_only:/app/sandbox/read_only:ro
+      # Mount writable directories with read-write permissions
+      - ../sandbox/writable/experiments:/app/sandbox/writable/experiments:rw
+      - ../sandbox/writable/results:/app/sandbox/writable/results:rw
+      - ../sandbox/writable/scratchpad:/app/sandbox/writable/scratchpad:rw
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/log
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      openai-network:
+        # Only allow outbound traffic to OpenAI API
+        aliases:
+          - openai-api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  openai-network:
+    driver: bridge
