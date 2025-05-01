@@ -61,10 +61,28 @@ class RunCodeTool(BaseTool):
         try:
             logger.info("Running Python code snippet")
             
-            # Redirect stdout and stderr to our string buffers
-            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                # Execute the code in the current global namespace
-                exec(code)
+            # Use a temporary file to store the code
+            import tempfile
+            with tempfile.TemporaryDirectory() as tempdir:
+                script_path = Path(tempdir) / "user_script.py"
+                with open(script_path, 'w', encoding='utf-8') as f:
+                    f.write(code)
+                
+                # Redirect stdout and stderr to our string buffers
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                    # Execute the code in a separate process
+                    # This provides better isolation than exec()
+                    result = subprocess.run(
+                        [sys.executable, str(script_path)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=self.max_execution_time,
+                        text=True
+                    )
+                    
+                    # Add captured output to our buffers
+                    stdout_capture.write(result.stdout)
+                    stderr_capture.write(result.stderr)
                 
             # Get the captured output
             stdout = stdout_capture.getvalue()
@@ -83,6 +101,10 @@ class RunCodeTool(BaseTool):
             logger.info("Code executed successfully")
             return result
             
+        except subprocess.TimeoutExpired:
+            stderr = f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
+            logger.error(stderr)
+            return stderr
         except Exception as e:
             # Get the traceback
             tb = traceback.format_exc()

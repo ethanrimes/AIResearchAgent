@@ -65,13 +65,13 @@ class ExperimentChain:
         Returns:
             List of tools.
         """
+        # For experiment chain, we can read from read_only, hypothesis, and planning, 
+        # but write only to experiment and results
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"]),
                 str(self.workspace["hypothesis"]),
-                str(self.workspace["planning"]),
-                str(self.workspace["experiment"]),
-                str(self.workspace["results"])
+                str(self.workspace["planning"])
             ]
         )
         
@@ -91,7 +91,8 @@ class ExperimentChain:
         )
         
         run_bash_tool = RunBashTool(
-            working_dir=str(self.workspace["experiment"])
+            working_dir=str(self.workspace["experiment"]),
+            output_dir=str(self.workspace["results"])
         )
         
         run_code_tool = RunCodeTool()

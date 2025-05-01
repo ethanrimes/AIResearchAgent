@@ -88,7 +88,15 @@ class Agent:
         # Base paths
         base_dir = Path("/app")
         read_only_dir = base_dir / "sandbox" / "read_only"
-        writable_dir = base_dir / "sandbox" / "writable" / f"run_{self.run_id}"
+        
+        # Get the active run path
+        try:
+            from core.utils.directive_utils import get_active_run_path
+            writable_dir = get_active_run_path()
+        except (FileNotFoundError, ValueError) as e:
+            logger.warning(f"Could not get active run path: {e}")
+            # Fallback to the old behavior
+            writable_dir = base_dir / "sandbox" / "writable" / f"run_{self.run_id}"
         
         # Ensure writable directories exist
         for subdir in ["hypothesis", "planning", "experiment", "results", "findings", "scratchpad"]:

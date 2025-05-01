@@ -60,6 +60,7 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
     role = directive_data.get('role', 'You are an AI research assistant')
     task = directive_data.get('task', 'Help conduct research on improving LLM reasoning')
     context = directive_data.get('context', '')
+    constraints = directive_data.get('constraints', '')  # Add constraints field
     instructions = directive_data.get('instructions', [])
     output_format = directive_data.get('output_format', '')
     
@@ -69,6 +70,10 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
     
     if context:
         formatted += f"# Context\n{context}\n\n"
+    
+    # Add constraints section if it exists
+    if constraints:
+        formatted += f"# Constraints\n{constraints}\n\n"
         
     if instructions:
         formatted += "# Instructions\n"
@@ -78,6 +83,13 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
         
     if output_format:
         formatted += f"# Output Format\n{output_format}\n\n"
+    
+    # Replace placeholders
+    try:
+        active_run_path = get_active_run_path()
+        formatted = formatted.replace("{ACTIVE_RUN_PATH}", str(active_run_path))
+    except (FileNotFoundError, ValueError) as e:
+        logger.warning(f"Could not replace ACTIVE_RUN_PATH placeholder: {e}")
         
     logger.info(f"Formatted directive with {len(instructions)} instructions")
     return formatted
@@ -108,3 +120,28 @@ def load_all_directives(directives_path: str) -> Dict[str, str]:
             logger.error(f"Error loading directive {yaml_file}: {e}")
             
     return directives
+
+def get_active_run_path():
+    """
+    Get the active run path from /app/active_run_path/path.txt.
+    
+    Returns:
+        Path object representing the active run path.
+    """
+    from pathlib import Path
+    
+    active_run_path_file = Path("/app/active_run_path/path.txt")
+    if not active_run_path_file.exists():
+        raise FileNotFoundError("Active run path file not found: /app/active_run_path/path.txt")
+        
+    with open(active_run_path_file, 'r') as f:
+        run_path = f.read().strip()
+        
+    if not run_path:
+        raise ValueError("Active run path is empty")
+        
+    run_path = Path(run_path)
+    if not run_path.exists():
+        run_path.mkdir(parents=True, exist_ok=True)
+        
+    return run_path

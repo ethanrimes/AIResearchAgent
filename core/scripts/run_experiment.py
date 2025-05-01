@@ -57,12 +57,54 @@ def main():
         # Log startup information
         logger.info("Starting AI Research Agent")
         logger.info(f"Using configuration file: {args.config}")
+
+        # Check if run directory was specified
+        run_dir = args.run_dir
+        if not run_dir:
+            # Create a new run directory
+            run_dir = Path("/app/sandbox/writable") / f"run_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created new run directory: {run_dir}")
+        else:
+            run_dir = Path(run_dir)
+            run_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Using specified run directory: {run_dir}")
+            
+        # Create the active run path file
+        active_run_path_file = Path("/app/active_run_path/path.txt")
+        active_run_path_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(active_run_path_file, 'w') as f:
+            f.write(str(run_dir))
+        logger.info(f"Set active run path to: {run_dir}")
         
         # Check if run directory was specified from environment variable
         run_dir_from_env = os.environ.get("EXPERIMENT_RUN_PATH")
         if run_dir_from_env:
             logger.info(f"Using run directory from environment: {run_dir_from_env}")
             
+        # Load configuration from file
+        config_path = args.config
+        if not Path(config_path).exists():
+            logger.error(f"Configuration file not found: {config_path}")
+            sys.exit(1)
+            
+        # Read the config file
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Override config values with environment variables if they exist
+        if os.environ.get("DATASET_PATH"):
+            logger.info(f"Overriding dataset_path from environment: {os.environ['DATASET_PATH']}")
+            config["dataset_path"] = os.environ["DATASET_PATH"]
+        
+        if os.environ.get("AGENT_MODEL"):
+            logger.info(f"Overriding agent_model from environment: {os.environ['AGENT_MODEL']}")
+            config["agent_model"] = os.environ["AGENT_MODEL"]
+            
+        if os.environ.get("REASONER_MODEL"):
+            logger.info(f"Overriding reasoner_model from environment: {os.environ['REASONER_MODEL']}")
+            config["reasoner_model"] = os.environ["REASONER_MODEL"]
+        
         # Ensure environment variables for API access are set
         if not os.environ.get("OPENAI_API_KEY"):
             logger.warning("OPENAI_API_KEY environment variable is not set")
@@ -72,19 +114,18 @@ def main():
             os.environ["OLLAMA_BASE_URL"] = "http://host.docker.internal:11434"
             logger.info(f"Set default OLLAMA_BASE_URL: {os.environ['OLLAMA_BASE_URL']}")
         
-        # Override config with environment variables if specified
-        config_path = args.config
-        if not Path(config_path).exists():
-            logger.error(f"Configuration file not found: {config_path}")
-            sys.exit(1)
+        # Write modified config back to a temporary file
+        temp_config_path = Path("/tmp/modified_config.yaml")
+        with open(temp_config_path, 'w') as f:
+            yaml.dump(config, f)
             
-        # Initialize the agent with the configuration
-        agent = Agent(config_path)
+        # Initialize the agent with the modified configuration
+        agent = Agent(str(temp_config_path))
         
         # Run the agent
         results = agent.run()
         
-        # Log the results
+        # Rest of the function remains the same
         if results["status"] == "success":
             logger.info(f"Agent run completed successfully in {results['elapsed_time']:.2f} seconds")
             logger.info(f"Results available in: {agent.workspace['findings']}")

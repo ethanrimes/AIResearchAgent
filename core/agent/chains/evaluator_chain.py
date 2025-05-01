@@ -59,6 +59,8 @@ class EvaluatorChain:
         Returns:
             List of tools.
         """
+        # For evaluator chain, we can read from read_only, hypothesis, planning, experiment, and results, 
+        # but write only to findings
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"]),

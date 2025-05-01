@@ -59,6 +59,7 @@ class HypothesisChain:
         Returns:
             List of tools.
         """
+        # For hypothesis chain, we can read from read_only and write only to hypothesis
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"])

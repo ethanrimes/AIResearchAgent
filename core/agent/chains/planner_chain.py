@@ -59,6 +59,7 @@ class PlannerChain:
         Returns:
             List of tools.
         """
+        # For planner chain, we can read from read_only and hypothesis, but write only to planning
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"]),

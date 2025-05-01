@@ -1,12 +1,13 @@
 import json
 import logging
 from typing import Dict, List, Any
+import os
 
 class rStarDataLoader:
     """
     Simple data loader for math problem datasets in JSON format.
     """
-    def __init__(self, dataset_path: str, logger=None):
+    def __init__(self):
         """
         Initialize the data loader.
         
@@ -14,8 +15,8 @@ class rStarDataLoader:
             dataset_path: Path to the JSON dataset file
             logger: Optional logger instance (will create one if not provided)
         """
-        self.dataset_path = dataset_path
-        self.logger = logger or logging.getLogger(__name__)
+        self.dataset_path = os.environ.get("DATASET_PATH")
+        self.logger = logging.getLogger(__name__)
     
     def load(self) -> List[Dict[str, Any]]:
         """
