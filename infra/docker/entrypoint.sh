@@ -1,84 +1,110 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Set default timeout
+# -------------------------------------------------
+# 0.  Read environment variables (with defaults)
+# -------------------------------------------------
 : "${EXPERIMENT_TIMEOUT:=300}"
-
-# Use the run path provided from the environment
 : "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
 echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
+echo "$EXPERIMENT_RUN_PATH" > /app/active_run_path/path.txt
 
-# Write to a file so Python can read it too (if not passed through env)
-echo "$EXPERIMENT_RUN_PATH" > /app/active_run_path.txt
-
-# Print startup information
 echo "Starting AI Research Agent with experiment timeout: ${EXPERIMENT_TIMEOUT}s"
 echo "Using OpenAI API for agent"
 echo "Using Ollama for local inference via host.docker.internal"
 
-# Check permissions
+# -------------------------------------------------
+# 1.  Filesystem-permission checks
+# -------------------------------------------------
 echo "Checking filesystem permissions..."
 
-# Verify read access to read_only directory
-if [ ! -r "/app/sandbox/read_only" ]; then
-    echo "Error: Cannot read from /app/sandbox/read_only directory!"
-    exit 1
+readonly_ro="/app/sandbox/read_only"
+readonly_data="/app/data"
+readonly_parent="/app/sandbox/writable"
+
+if [[ ! -r "$readonly_ro" ]];   then echo "❌ Cannot read $readonly_ro";   exit 1; else echo "✓ Read access to $readonly_ro confirmed"; fi
+if [[ ! -r "$readonly_data" ]]; then echo "❌ Cannot read $readonly_data"; exit 1; else echo "✓ Read access to $readonly_data confirmed"; fi
+
+# Create run sub-dirs (the bind mount itself must already exist)
+mkdir -p "${EXPERIMENT_RUN_PATH}"/{planning,experiment,results,scratchpad}
+if [[ ! -w "$EXPERIMENT_RUN_PATH" ]]; then
+  echo "❌ Cannot write to $EXPERIMENT_RUN_PATH"; exit 1
 else
-    echo "✓ Read access to /app/sandbox/read_only confirmed"
+  echo "✓ Write access to $EXPERIMENT_RUN_PATH confirmed"
 fi
 
-# Verify read access to data directory
-if [ ! -r "/app/data" ]; then
-    echo "Error: Cannot read from /app/data directory!"
-    exit 1
+# We must NOT be able to write to the parent writable dir
+if touch "${readonly_parent}/should_not_write.txt" 2>/dev/null; then
+  echo "❌ Unexpected write access to $readonly_parent"; rm -f "${readonly_parent}/should_not_write.txt"; exit 1
 else
-    echo "✓ Read access to /app/data confirmed"
+  echo "✓ Confirmed $readonly_parent is read-only as expected"
 fi
 
-# The run directory should already exist, but create subdirectories
-mkdir -p "$EXPERIMENT_RUN_PATH"/{planning,experiment,results,scratchpad}
-
-# Verify write access to the specific run directory
-if [ ! -w "$EXPERIMENT_RUN_PATH" ]; then
-    echo "Error: Cannot write to $EXPERIMENT_RUN_PATH directory!"
-    exit 1
-else
-    echo "✓ Write access to $EXPERIMENT_RUN_PATH confirmed"
-fi
-
-# Verify we CANNOT write to the parent writable directory (should be read-only)
-if touch /app/sandbox/writable/test_write.txt 2>/dev/null; then
-    echo "Error: Unexpected write access to /app/sandbox/writable!"
-    rm -f /app/sandbox/writable/test_write.txt
-    exit 1
-else
-    echo "✓ Confirmed /app/sandbox/writable is read-only as expected"
-fi
-
-# Test network connectivity to OpenAI API
+# -------------------------------------------------
+# 2.  Network-connectivity smoke tests
+# -------------------------------------------------
 echo "Testing connectivity to OpenAI API..."
-if curl -s --max-time 5 https://api.openai.com/v1/models > /dev/null; then
-    echo "✓ Network connectivity to OpenAI API confirmed"
+if curl -s --max-time 5 https://api.openai.com/v1/models >/dev/null; then
+  echo "✓ Network connectivity to OpenAI API confirmed"
 else
-    echo "Warning: Cannot connect to OpenAI API, check your network configuration"
-fi
+  echo "⚠️  Cannot connect to OpenAI API"; fi
 
-# Test network connectivity to Ollama
 echo "Testing connectivity to Ollama..."
-OLLAMA_HOST=$(echo $OLLAMA_BASE_URL | sed 's|^[^/]*//||' | sed 's|/.*$||')
-if curl -s --max-time 5 $OLLAMA_BASE_URL/api/tags > /dev/null; then
-    echo "✓ Network connectivity to Ollama confirmed"
+if curl -s --max-time 5 "${OLLAMA_BASE_URL%/}/api/tags" >/dev/null; then
+  echo "✓ Network connectivity to Ollama confirmed"
 else
-    echo "Warning: Cannot connect to Ollama at $OLLAMA_BASE_URL"
-    echo "Make sure Ollama is running on your host machine"
-fi
+  echo "⚠️  Cannot connect to Ollama at ${OLLAMA_BASE_URL}"; fi
 
-# Run the main experiment script with timeout
-if [ -f "/app/core/scripts/run_experiment.py" ]; then
-    echo "Executing experiment with ${EXPERIMENT_TIMEOUT}s timeout..."
-    timeout ${EXPERIMENT_TIMEOUT} python /app/core/scripts/run_experiment.py
-else
-    echo "Error: run_experiment.py not found!"
-    exit 1
-fi
+# Add this after your permissions check section and before running tests
+
+# -------------------------------------------------
+# 2.5. Log file structure for debugging
+# -------------------------------------------------
+echo "Logging file structure for debugging..."
+echo "Contents of /app directory:"
+find /app -type f -name "*.py" | sort > "${EXPERIMENT_RUN_PATH}/file_structure.log"
+
+# Log Python paths
+echo -e "\nPython Path:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+python -c "import sys; print('\n'.join(sys.path))" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+
+# Check if the specific file exists
+echo -e "\nSearching for rstar_data_loader.py:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+find /app -name "rstar_data_loader.py" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+
+# Print content of directories
+echo -e "\nContents of sandbox directory:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+ls -la /app/sandbox >> "${EXPERIMENT_RUN_PATH}/file_structure.log" 2>&1
+
+echo -e "\nContents of sandbox/read_only directory:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+ls -la /app/sandbox/read_only >> "${EXPERIMENT_RUN_PATH}/file_structure.log" 2>&1
+
+echo -e "\nContents of sandbox/read_only/dataloader directory (if exists):" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+ls -la /app/sandbox/read_only/dataloader >> "${EXPERIMENT_RUN_PATH}/file_structure.log" 2>&1 || echo "Directory not found" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+
+echo "✓ File structure logged to ${EXPERIMENT_RUN_PATH}/file_structure.log"
+
+
+# -------------------------------------------------
+# 3.  Run the infra “setup tests” suite (pytest)
+# -------------------------------------------------
+echo "Running container setup tests with pytest..."
+/app/infra/docker/setup_tests/run_tests.sh
+echo "✓ pytest setup tests passed"
+
+# -------------------------------------------------
+# 4.  Persist a proof-of-write file in the run dir
+# -------------------------------------------------
+echo "Verifying writable run directory by leaving a test artefact..."
+echo "hello-from-entrypoint $(date -Is)" > "${EXPERIMENT_RUN_PATH}/entrypoint_write_test.txt"
+echo "✓ File written to ${EXPERIMENT_RUN_PATH}/entrypoint_write_test.txt"
+
+# -------------------------------------------------
+# 5.  (Optional) start the main experiment
+# -------------------------------------------------
+# echo "Executing experiment script with timeout ${EXPERIMENT_TIMEOUT}s ..."
+# timeout "${EXPERIMENT_TIMEOUT}" python /app/core/scripts/run_experiment.py
+
+# Keep the container alive if no experiment is launched
+echo "Container initialisation finished."

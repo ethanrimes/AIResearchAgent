@@ -28,18 +28,28 @@ services:
       # - ../sandbox/writable:/app/sandbox/writable:ro
       # Mount the specific run directory with read-write permissions
       - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
+      # now we can modify entry point without rebuilding
     read_only: true
     tmpfs:
       - /tmp
       - /run
       - /var/log
+      - /app/active_run_path:size=1k
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     networks:
-      openai-network:
-        aliases:
-          - openai-api
+      - openai-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Add this line:
+    restart: "no"
+    # This is the correct way to auto-remove in docker-compose:
+    init: true
+    command: ["sh", "-c", "trap 'exit 0' SIGTERM; /app/infra/docker/entrypoint.sh; exit 0"]
+
+# Define networks at the top level
+networks:
+  openai-network:
+    driver: bridge

@@ -1,6 +1,9 @@
-# infra/docker/setup_tests/test_dataloader.py
 import pytest
-from core.rstar_data_loader import rStarDataLoader
+from pathlib import Path
+import sys
+# Add the app directory to Python path
+sys.path.append('/app')
+from sandbox.read_only.dataloader.rstar_data_loader import rStarDataLoader
 
 @pytest.fixture
 def loader():
