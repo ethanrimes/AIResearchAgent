@@ -9,6 +9,8 @@ import traceback
 from io import StringIO
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, Any
+import subprocess
+from pathlib import Path
 
 from langchain.tools import BaseTool
 

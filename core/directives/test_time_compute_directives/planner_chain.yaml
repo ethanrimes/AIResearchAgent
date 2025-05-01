@@ -37,7 +37,7 @@ instructions:
   - Include a plan for analyzing the results and drawing conclusions.
   - Ensure the experiment is feasible with the available ollama model and dataset.
   - Consider potential confounds and how to control for them.
-  - Write your final experiment plan to the output JSON file.
+  - Write your final experiment plan to the output JSON file in the planning directory.
 
 output_format: |
   Your final output should be a JSON file with the following structure:

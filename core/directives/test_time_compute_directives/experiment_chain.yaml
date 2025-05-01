@@ -44,16 +44,10 @@ instructions:
   - Include error handling and logging.
   - Execute the code and collect the results.
   - If there are any errors or issues, debug and fix them.
-  - Write the final results to the output JSON file.
+  - Write the final results to an output JSON in the results/ directory.
 
 output_format: |
   Your implementation should include these Python files:
-  
-  1. experiment_runner.py - Main script that orchestrates the experiment
-  2. baseline.py - Implementation of the baseline approach
-  3. hypothesis_implementations.py - Implementations of each hypothesis
-  4. evaluation.py - Functions for evaluating the results
-  5. utils.py - Utility functions
   
   Your final results should be written to a JSON file with the following structure:
   

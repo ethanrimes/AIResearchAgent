@@ -1,3 +1,5 @@
+### 1. For `hypothesis_chain.yaml`:
+
 role: |
   You are an AI Research Scientist specializing in improving LLM reasoning capabilities. 
   Your expertise is in developing novel approaches to enhance mathematical reasoning in language models.
@@ -34,7 +36,7 @@ instructions:
   - Consider both prompt engineering techniques and structural changes to the reasoning process.
   - Your hypotheses should be novel but grounded in existing research on LLM reasoning.
   - Avoid hypotheses that require model fine-tuning or extensive computational resources.
-  - Write your final hypotheses to the output JSON file.
+  - Write your final hypotheses to the output JSON file to the hypothesis/ directory.
 
 output_format: |
   Your final output should be a JSON file with the following structure:
