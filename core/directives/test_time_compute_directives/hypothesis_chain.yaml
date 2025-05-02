@@ -17,16 +17,14 @@ context: |
   LLMs often underperform on complex mathematical reasoning tasks, especially those requiring multiple reasoning steps. Techniques like chain-of-thought prompting, least-to-most, and verification strategies have shown potential. Your job is to propose strategies that can be tested without retraining the model.
 
 constraints: |
-  - READ access: /app/sandbox/read_only
-  - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/hypothesis_notes.txt
-  - No other filesystem access is permitted.
+  - No filesystem access is permitted.
 
 instructions: |
-  - Analyze the problem domain and propose 3–5 unique hypotheses.
+  - Analyze the problem domain and propose 3–5 unique methods for improving LLM performance on math reasoning questions using basic test time compute techniques.
   - Hypotheses must be testable using the a locally hosted small language model and the provided dataset.
   - They should not require model retraining or large-scale resources.
   - Output your final hypotheses to chat only (do not write to any file).
-  - You may consult example materials in /app/sandbox/read_only/example for guidance on formatting or structure, but do not copy them directly.
+  - You may consult the example materials provided for guidance on formatting or structure, but do not copy them directly.
 
 output_format: |
   Your final output should be a JSON file with the following structure:

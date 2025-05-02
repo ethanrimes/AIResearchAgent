@@ -5,6 +5,7 @@ Tool for writing to an agent's personal scratch-pad.
 import logging
 import os
 from pathlib import Path
+from typing import Type, ClassVar
 
 from pydantic import Field
 from langchain.tools import BaseTool
@@ -19,7 +20,7 @@ class WriteScratchpadTool(BaseTool):
     description: str = (
         "Store thoughts, ideas and intermediate results in a personal scratch-pad."
     )
-    args_schema = WriteScratchpadInput  # NEW
+    args_schema: ClassVar[Type[WriteScratchpadInput]] = WriteScratchpadInput
 
     scratchpad_file: Path = Field(...)
     logger: logging.Logger = Field(

@@ -4,7 +4,7 @@ Tool for writing files to allowed directories.
 
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import List, Type, ClassVar
 
 from pydantic import Field
 from langchain.tools import BaseTool
@@ -21,9 +21,7 @@ class WriteFileTool(BaseTool):
         "the file and the content to write. The file must be in one of the allowed "
         "directories. This tool overwrites existing files."
     )
-
-    args_schema = WriteFileInput  # NEW
-
+    args_schema: ClassVar[Type[WriteFileInput]] = WriteFileInput
     allowed_dirs: List[Path] = Field(...)
     logger: logging.Logger = Field(
         default_factory=lambda: logging.getLogger("ai_research_agent.write_file"),

@@ -9,7 +9,8 @@ import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Type, ClassVar
+
 
 from pydantic import Field
 from langchain.tools import BaseTool
@@ -22,7 +23,7 @@ class RunCodeTool(BaseTool):
 
     name: str = "run_code"
     description: str = "Execute a Python code snippet in an isolated subprocess."
-    args_schema = RunCodeInput  # NEW
+    args_schema: ClassVar[Type[RunCodeInput]] = RunCodeInput
 
     max_execution_time: int = Field(default=30)
     logger: logging.Logger = Field(

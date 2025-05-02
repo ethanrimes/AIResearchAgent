@@ -32,7 +32,8 @@ class rStarDataLoader:
                 "url": ""        # Empty placeholder
             }
         """
-        self.logger.info(f"Loading dataset from: {os.environ.get("DATASET_PATH")}")
+        self.dataset_path = os.environ.get("DATASET_PATH")
+        self.logger.info(f"Loading dataset from: {self.dataset_path}")
         
         try:
             with open(os.environ.get("DATASET_PATH"), "r", encoding="utf-8") as f:

@@ -4,7 +4,7 @@ Tool for reading from an agent's personal scratch-pad.
 
 import logging
 from pathlib import Path
-
+from typing import Type, ClassVar
 from pydantic import Field
 from langchain.tools import BaseTool
 
@@ -16,7 +16,7 @@ class ReadScratchpadTool(BaseTool):
 
     name: str = "read_scratchpad"
     description: str = "Return the current contents of the personal scratch-pad."
-    args_schema = ReadScratchpadInput  # NEW
+    args_schema: ClassVar[Type[ReadScratchpadInput]] = ReadScratchpadInput
 
     scratchpad_file: Path = Field(...)
     logger: logging.Logger = Field(

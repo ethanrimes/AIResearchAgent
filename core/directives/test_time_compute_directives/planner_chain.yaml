@@ -17,18 +17,17 @@ context: |
   You are working with hypotheses about test-time reasoning strategies, which will be applied to a dataset using a locally hosted small language model (Ollama). The experiment should support head-to-head comparison of multiple approaches using consistent inputs and metrics.
 
 constraints: |
-  - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis
-  - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/planner_notes.txt
-  - No other filesystem access is permitted.
-  - Do not write any files (output must be returned to chat).
+  - No tools are integrated for this task.
 
 instructions: |
-  - Read the hypotheses from {ACTIVE_RUN_PATH}/hypothesis.
-  - Design a plan that includes: implementation strategy for each hypothesis, evaluation metrics, baseline comparison, and a method for logging results.
+  - Read the hypotheses provided.
+  - The implementation plan should:
+    - Calculate model baseline performance (no test time compute techniques)
+    - Apply each proposed hypothesis technique to questions from a math test dataset and then score them for correctness
   - Add as much detail as possible about the implementation without writing any code.
   - Ensure your plan is feasible using a locally hosted model and dataset.
   - Output your plan as a structured JSON object to chat (do not write to any file).
-  - You may consult example plans in /app/sandbox/read_only/example for inspiration, but do not reuse code or content directly.
+  - You may consult the example plans provided for inspiration, but do not reuse code or content directly.
 
 output_format: |
   Your final output should be a JSON file with the following structure:

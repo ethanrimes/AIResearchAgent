@@ -5,22 +5,13 @@ This module is responsible for generating hypotheses about ways to improve
 LLM reasoning capacity, particularly for mathematical reasoning tasks.
 """
 
-import os
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain.tools import BaseTool
-from langchain.agents import AgentExecutor, create_structured_chat_agent
-
-# Import custom tools
-from core.agent.tools.read_file import ReadFileTool
-
-from core.agent.tools.read_scratchpad import ReadScratchpadTool
-from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
 
 from core.agent.schemas.output_schemas import HypothesisOutput
 from core.utils.path_utils import get_active_run_path
@@ -43,73 +34,37 @@ class HypothesisChain:
         self.workspace = workspace
         self.directive = directive
         self.output_file = workspace["hypothesis"] / "hypotheses.json"
-        self.scratchpad_file = workspace["scratchpad"] / "hypothesis_notes.txt"
         
         # Initialize logger as a property
         self.logger = logging.getLogger("ai_research_agent.hypothesis_chain")
         
-        # Initialize tools
-        self.tools = self._init_tools()
-        
-        # Initialize agent
-        self.agent = self._init_agent()
+        # Initialize the chain
+        self.chain = self._init_chain()
         
         self.logger.info("HypothesisChain initialized")
         
-    def _init_tools(self) -> List[BaseTool]:
+    def _init_chain(self) -> LLMChain:
         """
-        Initialize the tools for the hypothesis agent.
+        Initialize the LLM chain with the appropriate prompt.
         
         Returns:
-            List of tools.
-        """
-        # For hypothesis chain, we can read from read_only and write only to hypothesis
-        read_tool = ReadFileTool(
-            allowed_dirs=[
-                str(self.workspace["read_only"])
-            ]
-        )
-        
-        read_scratchpad_tool = ReadScratchpadTool(
-            scratchpad_file=str(self.scratchpad_file)
-        )
-        
-        write_scratchpad_tool = WriteScratchpadTool(
-            scratchpad_file=str(self.scratchpad_file)
-        )
-        
-        return [
-            read_tool,
-            read_scratchpad_tool,
-            write_scratchpad_tool
-        ]
-        
-    def _init_agent(self) -> AgentExecutor:
-        """
-        Initialize the hypothesis agent.
+            Initialized LLMChain
         """
         prompt = PromptTemplate.from_template(
             template=(
                 f"{self.directive}\n\n"
-                "Tool names you can call: {tool_names}\n\n"
-                "Full tool descriptions:\n{tools}\n\n"
+                "# Example Hypotheses\n"
+                "For reference, here is an example of what well-structured hypotheses look like:\n"
+                "```\n"
+                "sandbox/read_only/example/hypotheses.json\n"
+                "```\n\n"
                 "{input}\n\n"
-                "{agent_scratchpad}"
             )
         )
 
-        agent = create_structured_chat_agent(
+        return LLMChain(
             llm=self.llm,
-            tools=self.tools,
-            prompt=prompt,
-            stop_sequence=False
-        )
-
-        return AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=10
+            prompt=prompt
         )
         
     def run(self) -> Dict[str, Any]:
@@ -129,15 +84,19 @@ class HypothesisChain:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # ------------------------------------------------------------------
-        # Structured invocation
+        # Structured invocation with the chain
         # ------------------------------------------------------------------
-        runnable = self.agent.with_structured_output(HypothesisOutput)
-        result: HypothesisOutput = runnable.invoke(
-            {"input": "Generate your hypotheses and return them following the "
-                      "required JSON schema."}
+        # Prepare input with any example data embedded
+        input_text = "Generate your hypotheses about ways to improve LLM reasoning capabilities. " \
+                     "Focus on mathematical reasoning tasks in particular. " \
+                     "Return them following the required JSON schema for HypothesisOutput."
+        
+        # Run the chain with structured output
+        result = self.llm.with_structured_output(HypothesisOutput).invoke(
+            self.chain.prompt.format(input=input_text)
         )
 
-        # Persist
+        # Persist the result
         output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
         self.logger.info(f"Wrote hypotheses to {output_path}")
 

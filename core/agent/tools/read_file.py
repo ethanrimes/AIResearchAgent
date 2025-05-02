@@ -5,6 +5,7 @@ Tool for reading files from allowed directories.
 import logging
 from pathlib import Path
 from typing import List
+from typing import List, Type, ClassVar
 
 from pydantic import Field
 from langchain.tools import BaseTool
@@ -21,9 +22,8 @@ class ReadFileTool(BaseTool):
         "You must provide the full path to the file. The file must be located in one "
         "of the allowed directories."
     )
+    args_schema: ClassVar[Type[ReadFileInput]] = ReadFileInput
 
-    # <--- LangChain will validate input with this schema
-    args_schema = ReadFileInput  # NEW
 
     allowed_dirs: List[Path] = Field(...)
     logger: logging.Logger = Field(

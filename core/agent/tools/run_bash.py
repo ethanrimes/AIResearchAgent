@@ -6,7 +6,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Type, ClassVar
 
 from pydantic import Field
 from langchain.tools import BaseTool
@@ -23,7 +23,7 @@ class RunBashTool(BaseTool):
         "stdout/stderr."
     )
 
-    args_schema = RunBashInput  # NEW
+    args_schema: ClassVar[Type[RunBashInput]] = RunBashInput
 
     working_dir: Path = Field(...)
     output_dir: Optional[Path] = None

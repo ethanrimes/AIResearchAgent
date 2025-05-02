@@ -17,10 +17,7 @@ context: |
   The goal is to determine the effectiveness of various test-time reasoning strategies applied to LLMs on mathematical tasks. You will compare all hypotheses against the baseline and generate insights to guide future work.
 
 constraints: |
-  - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning, {ACTIVE_RUN_PATH}/experiment, {ACTIVE_RUN_PATH}/results
-  - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/evaluator_notes.txt
-  - No other filesystem access is allowed.
-  - Do not write any files (output must be returned to chat).
+  - No tool access is permitted.
 
 instructions: |
   - Read the hypotheses, experiment plan, implementation code, and experiment results.
@@ -28,7 +25,7 @@ instructions: |
   - Look for patterns in where and how each strategy succeeded or failed.
   - Propose insights that explain the observed performance differences.
   - Output your final findings as a structured JSON object to chat (do not write to any file).
-  - You may refer to /app/sandbox/read_only/example for example analysis formats or structures, but do not reuse text directly.
+  - You may refer to the example analysis formats or structures, but do not reuse text directly.
 
 output_format: |
   Your final output should be a JSON file with the following structure:
