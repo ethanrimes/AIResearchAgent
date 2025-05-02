@@ -6,7 +6,7 @@ import os
 import logging
 from pathlib import Path
 from typing import List, Dict, Any
-
+from pydantic import Field
 from langchain.tools import BaseTool
 
 class WriteFileTool(BaseTool):
@@ -25,6 +25,9 @@ class WriteFileTool(BaseTool):
     
     Output will be a success or error message.
     """
+    allowed_dirs: List[Path] = Field(...)
+    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
+        "ai_research_agent.write_file"), exclude=True)
     
     def __init__(self, allowed_dirs: List[str]):
         """

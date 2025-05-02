@@ -5,6 +5,7 @@ Tool for writing to an agent's personal scratchpad.
 import os
 import logging
 from pathlib import Path
+from pydantic import Field
 
 from langchain.tools import BaseTool
 
@@ -34,6 +35,9 @@ class WriteScratchpadTool(BaseTool):
     
     Output will be a success or error message.
     """
+    scratchpad_file: Path = Field(...)
+    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
+        "ai_research_agent.write_to_scratchpad"), exclude=True)
     
     def __init__(self, scratchpad_file: str):
         """

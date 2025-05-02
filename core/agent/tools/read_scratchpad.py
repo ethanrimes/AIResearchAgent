@@ -5,6 +5,7 @@ Tool for reading from an agent's personal scratchpad.
 import os
 import logging
 from pathlib import Path
+from pydantic import Field
 
 from langchain.tools import BaseTool
 
@@ -20,6 +21,9 @@ class ReadScratchpadTool(BaseTool):
     Input should be an empty string or the word "read".
     Output will be the contents of your scratchpad.
     """
+    scratchpad_file: Path = Field(...)
+    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
+        "ai_research_agent.read_scratchpad"), exclude=True)
     
     def __init__(self, scratchpad_file: str):
         """

@@ -11,6 +11,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, Any
 import subprocess
 from pathlib import Path
+from pydantic import Field
 
 from langchain.tools import BaseTool
 
@@ -30,6 +31,9 @@ class RunCodeTool(BaseTool):
     run_code("print('Hello, world!')")
     run_code("import math\\nprint(math.sqrt(16))")
     """
+    max_execution_time: int = Field(default=30)
+    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
+        "ai_research_agent.run_code"), exclude=True)
     
     def __init__(self, max_execution_time: int = 30):
         """

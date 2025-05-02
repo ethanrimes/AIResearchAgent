@@ -6,7 +6,8 @@ import os
 import subprocess
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from pydantic import Field
 
 from langchain.tools import BaseTool
 
@@ -27,7 +28,11 @@ class RunBashTool(BaseTool):
     run_bash("ls -la")
     run_bash("python experiment.py")
     """
-    
+    working_dir: Path = Field(...)
+    output_dir: Optional[Path] = None
+    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
+        "ai_research_agent.run_bash"), exclude=True)
+
     def __init__(self, working_dir: str, output_dir: str = None):
         """
         Initialize the RunBashTool.
