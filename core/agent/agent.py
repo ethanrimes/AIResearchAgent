@@ -127,7 +127,7 @@ class Agent:
         """
         return ChatOpenAI(
             model=self.config["agent_model"],
-            temperature=0.0,  # Use deterministic outputs for research
+            # temperature=0.0,  # Use deterministic outputs for research
         )
         
     def _init_chains(self) -> Dict[str, Any]:

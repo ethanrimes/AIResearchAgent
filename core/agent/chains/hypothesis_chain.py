@@ -91,28 +91,28 @@ class HypothesisChain:
     def _init_agent(self) -> AgentExecutor:
         """
         Initialize the hypothesis agent.
-        
-        Returns:
-            AgentExecutor instance.
         """
-        # Create the prompt template
         prompt = PromptTemplate.from_template(
-            template=f"{self.directive}\n\n{{input}}\n\n{{agent_scratchpad}}"
+            template=(
+                f"{self.directive}\n\n"
+                "Tool names you can call: {tool_names}\n\n"
+                "Full tool descriptions:\n{tools}\n\n"
+                "{input}\n\n"
+                "{agent_scratchpad}"
+            )
         )
-        
-        # Create the agent
+
         agent = create_structured_chat_agent(
             llm=self.llm,
             tools=self.tools,
             prompt=prompt
         )
-        
-        # Create the agent executor
+
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
             verbose=True,
-            max_iterations=10  # Limit iterations to prevent infinite loops
+            max_iterations=10
         )
         
     def run(self) -> Dict[str, Any]:

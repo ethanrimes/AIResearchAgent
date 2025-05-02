@@ -109,28 +109,28 @@ class ExperimentChain:
     def _init_agent(self) -> AgentExecutor:
         """
         Initialize the experiment agent.
-        
-        Returns:
-            AgentExecutor instance.
         """
-        # Create the prompt template
         prompt = PromptTemplate.from_template(
-            template=f"{self.directive}\n\n{{input}}\n\n{{agent_scratchpad}}"
+            template=(
+                f"{self.directive}\n\n"
+                "Tool names you can call: {tool_names}\n\n"
+                "Full tool descriptions:\n{tools}\n\n"
+                "{input}\n\n"
+                "{agent_scratchpad}"
+            )
         )
-        
-        # Create the agent
+
         agent = create_structured_chat_agent(
             llm=self.llm,
             tools=self.tools,
             prompt=prompt
         )
-        
-        # Create the agent executor
+
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
             verbose=True,
-            max_iterations=self.max_iterations * 2  # Allow for multiple tool uses per iteration
+            max_iterations=self.max_iterations * 2
         )
         
     def run(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:

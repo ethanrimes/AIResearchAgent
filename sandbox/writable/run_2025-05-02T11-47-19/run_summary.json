@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "run_id": "2025-05-02T11-47-19",
+  "elapsed_time": 0.02180194854736328,
+  "error": "'Input to PromptTemplate is missing variables {\\'\\\\n  \"hypotheses\"\\'}.  Expected: [\\'\\\\n  \"hypotheses\"\\', \\'agent_scratchpad\\', \\'input\\'] Received: [\\'input\\', \\'intermediate_steps\\', \\'agent_scratchpad\\']\\nNote: if you intended {\\n  \"hypotheses\"} to be part of the string and not a variable, please escape it with double curly braces like: \\'{{\\n  \"hypotheses\"}}\\'.\\nFor troubleshooting, visit: https://python.langchain.com/docs/troubleshooting/errors/INVALID_PROMPT_INPUT '"
+}

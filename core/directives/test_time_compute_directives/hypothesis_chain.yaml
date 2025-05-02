@@ -33,20 +33,20 @@ output_format: |
   Your final output should be a JSON file with the following structure:
   
   ```json
-  {
+  {{
     "hypotheses": [
-      {
+      {{
         "id": "H1",
         "name": "Short descriptive name for the hypothesis",
         "description": "Detailed description of the hypothesis",
         "rationale": "Why you think this approach might improve reasoning",
         "testability": "How this hypothesis can be tested with the available resources"
-      },
+      }},
       // Additional hypotheses...
     ],
-    "meta": {
+    "meta": {{
       "timestamp": "YYYY-MM-DDTHH:MM:SS",
       "dataset_analyzed": "Name of dataset analyzed"
-    }
-  }
+    }}
+  }}
   ```

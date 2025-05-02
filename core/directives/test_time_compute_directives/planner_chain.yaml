@@ -33,30 +33,30 @@ output_format: |
   Your final output should be a JSON file with the following structure:
   
   ```json
-  {
-    "experiment_plan": {
+  {{
+    "experiment_plan": {{
       "title": "Brief title for the experiment",
       "description": "Overall description of the experiment",
-      "baseline": {
+      "baseline": {{
         "description": "Description of the baseline approach",
         "implementation": "How the baseline will be implemented"
-      },
+      }},
       "hypotheses_testing": [
-        {
+        {{
           "hypothesis_id": "H1",
           "implementation": "How this hypothesis will be implemented",
           "expected_outcome": "What you expect to observe if the hypothesis is correct"
-        },
+        }},
         // Additional hypotheses...
       ],
-      "evaluation": {
+      "evaluation": {{
         "metrics": ["List of metrics to use"],
         "methodology": "How the evaluation will be conducted"
-      },
+      }},
       "analysis_plan": "How the results will be analyzed and compared"
-    },
-    "meta": {
+    }},
+    "meta": {{
       "timestamp": "YYYY-MM-DDTHH:MM:SS"
-    }
-  }
+    }}
+  }}
   ```
