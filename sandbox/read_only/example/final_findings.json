@@ -70,10 +70,5 @@
         "Explore whether combining techniques (e.g., H1 with H3) provides additive or diminishing returns",
         "Develop automated detection of likely error points in solution processes to apply targeted verification only where needed"
       ]
-    },
-    "meta": {
-      "timestamp": "2025-05-01T17:45:22",
-      "dataset": "aime2024_test.json",
-      "model": "qwen3:1.7b"
     }
   }

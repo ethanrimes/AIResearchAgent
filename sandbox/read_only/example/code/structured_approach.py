@@ -1,13 +1,13 @@
 """
 Implementation of the Structured Step-by-Step approach for solving math problems.
 
-This module provides functions for generating structured prompts and
-processing math problems with a structured reasoning technique.
+This module provides a solver that uses a structured reasoning approach
+to guide the model through a step-by-step process.
 """
 
 import logging
 import time
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Tuple
 
 from sandbox.read_only.models.ollama_client import OllamaClient, GenerationParameters
 
@@ -18,16 +18,14 @@ class StructuredSolver:
     Solver using structured step-by-step reasoning for math problems.
     """
     
-    def __init__(self, model_name: str):
+    def __init__(self):
         """
         Initialize the structured solver.
         
-        Args:
-            model_name: Name of the Ollama model to use
+        The model to use is handled by the OllamaClient through environment variables.
         """
-        self.model_name = model_name
-        self.ollama_client = OllamaClient(default_model=model_name)
-        logger.info(f"StructuredSolver initialized with model: {model_name}")
+        self.ollama_client = OllamaClient()
+        logger.info(f"StructuredSolver initialized with model: {self.ollama_client.default_model}")
     
     def generate_prompt(self, problem: Dict) -> str:
         """
@@ -69,9 +67,9 @@ Begin your structured solution:"""
         
         # Create generation parameters
         params = GenerationParameters(
-            model=self.model_name,  # Will be overridden by OllamaClient
+            model="",  # This will be ignored by OllamaClient
             prompt=prompt,
-            temperature=0.1,
+            temperature=0.1,  # Low temperature for more deterministic responses
             top_p=0.9
         )
         

@@ -28,9 +28,5 @@
         "rationale": "Tracking units and dimensions provides an additional consistency check that can catch many mathematical errors. This approach is widely used in physics and engineering to verify calculations and might help LLMs catch inconsistencies in their reasoning.",
         "testability": "This can be tested by comparing performance on a standard prompt versus one that requires explicit tracking and verification of units throughout the solution process."
       }
-    ],
-    "meta": {
-      "timestamp": "2025-05-01T12:34:56",
-      "dataset_analyzed": "aime2024_test.json"
-    }
+    ]
   }

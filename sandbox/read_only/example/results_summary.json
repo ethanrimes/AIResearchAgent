@@ -140,20 +140,7 @@
             "average_time": 6.95
           }
         }
-      ],
-      "comparison": {
-        "best_performing": "H1",
-        "accuracy_improvements": {
-          "H1": 0.14,
-          "H2": 0.10,
-          "H3": 0.06,
-          "H4": 0.04
-        }
-      }
-    },
-    "meta": {
-      "timestamp": "2025-05-01T15:23:45",
-      "dataset": "aime2024_test.json",
-      "model": "qwen3:1.7b"
-    }
+      ]
   }
+
+}

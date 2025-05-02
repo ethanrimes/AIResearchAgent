@@ -95,15 +95,14 @@ class OllamaClient:
 
     # ---------- construction & immutability helpers ----------
     def __init__(self,
-                 base_url: Optional[str] = None,
-                 default_model: Optional[str] = None) -> None:
+                 base_url: Optional[str] = None) -> None:
         object.__setattr__(self, "_base_url",
                            base_url or os.getenv("OLLAMA_BASE_URL",
                                                  "http://host.docker.internal:11434"))
         object.__setattr__(self, "_default_model",
-                           default_model or os.getenv("OLLAMA_DEFAULT_MODEL"))
+                           os.getenv("OLLAMA_DEFAULT_MODEL"))
         if not self._default_model:
-            raise ValueError("A default model must be supplied via argument or "
+            raise ValueError("A default model must be supplied via "
                              "OLLAMA_DEFAULT_MODEL environment variable.")
         object.__setattr__(self, "_session", requests.Session())
 

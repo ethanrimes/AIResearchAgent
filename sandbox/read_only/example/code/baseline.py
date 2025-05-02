@@ -1,13 +1,13 @@
 """
 Implementation of the baseline approach for solving math problems.
 
-This module provides functions for generating baseline prompts and
-processing math problems without any reasoning enhancements.
+This module provides a simple solver that uses a basic prompt
+without any structured reasoning techniques.
 """
 
 import logging
 import time
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Tuple
 
 from sandbox.read_only.models.ollama_client import OllamaClient, GenerationParameters
 
@@ -18,16 +18,14 @@ class BaselineSolver:
     Solver using the baseline approach for math problems.
     """
     
-    def __init__(self, model_name: str):
+    def __init__(self):
         """
         Initialize the baseline solver.
         
-        Args:
-            model_name: Name of the Ollama model to use
+        The model to use is handled by the OllamaClient through environment variables.
         """
-        self.model_name = model_name
-        self.ollama_client = OllamaClient(default_model=model_name)
-        logger.info(f"BaselineSolver initialized with model: {model_name}")
+        self.ollama_client = OllamaClient()
+        logger.info(f"BaselineSolver initialized with model: {self.ollama_client.default_model}")
     
     def generate_prompt(self, problem: Dict) -> str:
         """
@@ -39,7 +37,7 @@ class BaselineSolver:
         Returns:
             Prompt string
         """
-        return f"Solve this math problem step-by-step:\n\n{problem['question']}"
+        return f"Solve this math problem step by step and provide your final answer:\n\n{problem['question']}"
     
     def solve(self, problem: Dict) -> Tuple[str, float]:
         """
@@ -56,9 +54,9 @@ class BaselineSolver:
         
         # Create generation parameters
         params = GenerationParameters(
-            model=self.model_name,  # Will be overridden by OllamaClient
+            model="",  # This will be ignored by OllamaClient
             prompt=prompt,
-            temperature=0.1,
+            temperature=0.1,  # Low temperature for more deterministic responses
             top_p=0.9
         )
         

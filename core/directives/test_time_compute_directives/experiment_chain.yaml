@@ -86,8 +86,7 @@ instructions: |
 
 output_format: |
 - When satisfied **stop** tool calls and output a brief plain-text summary (no JSON) that lists:
+  - A checklist of all of the requirements satisfied by the code
   - Files created/modified
   - How to run the experiment
   - Where the results are stored and in what format
-  
-  
