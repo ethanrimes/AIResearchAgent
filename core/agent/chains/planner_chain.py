@@ -22,8 +22,6 @@ from core.agent.tools.write_file import WriteFileTool
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
 from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
 
-logger = logging.getLogger(__name__)
-
 class PlannerChain:
     """
     Chain responsible for planning experiments to test hypotheses.

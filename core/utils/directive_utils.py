@@ -7,8 +7,8 @@ import yaml
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
+from core.utils.path_utils import get_active_run_path
 
-logger = logging.getLogger(__name__)
 
 def load_directive(yaml_path: str) -> str:
     """
@@ -24,6 +24,7 @@ def load_directive(yaml_path: str) -> str:
         FileNotFoundError: If the YAML file is not found.
         yaml.YAMLError: If the YAML file is invalid.
     """
+    logger = logging.getLogger("ai_research_agent.directive_utils")
     try:
         path = Path(yaml_path)
         logger.info(f"Loading directive from {yaml_path}")
@@ -56,6 +57,7 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
     Returns:
         The formatted directive as a string.
     """
+    logger = logging.getLogger("ai_research_agent.directive_utils")
     # Get the required fields
     role = directive_data.get('role', 'You are an AI research assistant')
     task = directive_data.get('task', 'Help conduct research on improving LLM reasoning')
@@ -101,6 +103,7 @@ def load_all_directives(directives_path: str) -> Dict[str, str]:
     Returns:
         Dictionary mapping directive names to formatted directive strings.
     """
+    logger = logging.getLogger("ai_research_agent.directive_utils")
     directives = {}
     path = Path(directives_path)
     
@@ -117,28 +120,3 @@ def load_all_directives(directives_path: str) -> Dict[str, str]:
             logger.error(f"Error loading directive {yaml_file}: {e}")
             
     return directives
-
-def get_active_run_path():
-    """
-    Get the active run path from /app/active_run_path/path.txt.
-    
-    Returns:
-        Path object representing the active run path.
-    """
-    from pathlib import Path
-    
-    active_run_path_file = Path("/app/active_run_path/path.txt")
-    if not active_run_path_file.exists():
-        raise FileNotFoundError("Active run path file not found: /app/active_run_path/path.txt")
-        
-    with open(active_run_path_file, 'r') as f:
-        run_path = f.read().strip()
-        
-    if not run_path:
-        raise ValueError("Active run path is empty")
-        
-    run_path = Path(run_path)
-    if not run_path.exists():
-        run_path.mkdir(parents=True, exist_ok=True)
-        
-    return run_path

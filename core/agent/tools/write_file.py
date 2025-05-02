@@ -9,13 +9,11 @@ from typing import List, Dict, Any
 
 from langchain.tools import BaseTool
 
-logger = logging.getLogger(__name__)
-
 class WriteFileTool(BaseTool):
     """Tool for writing files to allowed directories."""
     
-    name = "write_file"
-    description = """
+    name: str = "write_file"
+    description: str = """
     Use this tool to write content to a file.
     You must provide the full path to the file and the content to write.
     The file must be in one of the allowed directories.

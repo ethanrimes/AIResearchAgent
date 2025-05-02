@@ -8,13 +8,12 @@ from pathlib import Path
 
 from langchain.tools import BaseTool
 
-logger = logging.getLogger(__name__)
 
 class ReadScratchpadTool(BaseTool):
     """Tool for reading from an agent's personal scratchpad."""
     
-    name = "read_scratchpad"
-    description = """
+    name: str = "read_scratchpad"
+    description: str = """
     Use this tool to read the contents of your personal scratchpad.
     You can use this to retrieve your previous thoughts and notes.
     

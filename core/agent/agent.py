@@ -38,11 +38,10 @@ class Agent:
         Args:
             config_path: Path to the configuration file.
         """
+        self.logger = logging.getLogger("ai_research_agent.agent")
         self.config = self._load_config(config_path)
         self.run_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         self.workspace = self._setup_workspace()
-
-        self.logger = logging.getLogger("ai_research_agent.agent")
         
         # Initialize the LLM for the agents
         self.llm = self._init_llm()
@@ -86,7 +85,7 @@ class Agent:
         
         # Get the active run path
         try:
-            from core.utils.directive_utils import get_active_run_path
+            from core.utils.path_utils import get_active_run_path
             writable_dir = get_active_run_path()
         except (FileNotFoundError, ValueError) as e:
             self.logger.warning(f"Could not get active run path: {e}")

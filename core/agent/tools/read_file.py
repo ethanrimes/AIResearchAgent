@@ -12,8 +12,8 @@ from langchain.tools import BaseTool
 class ReadFileTool(BaseTool):
     """Tool for reading files from allowed directories."""
     
-    name = "read_file"
-    description = """
+    name: str = "read_file"
+    description: str = """
     Use this tool to read the contents of a file.
     You must provide the full path to the file.
     The file must be in one of the allowed directories.

@@ -8,13 +8,11 @@ from pathlib import Path
 
 from langchain.tools import BaseTool
 
-logger = logging.getLogger(__name__)
-
 class WriteScratchpadTool(BaseTool):
     """Tool for writing to an agent's personal scratchpad."""
     
-    name = "write_to_scratchpad"
-    description = """
+    name: str = "write_to_scratchpad"
+    description: str = """
     Use this tool to write content to your personal scratchpad.
     You can use this to store your thoughts, ideas, and intermediate results.
     

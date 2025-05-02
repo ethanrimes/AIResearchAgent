@@ -45,15 +45,37 @@ def main():
     args = parse_args()
     
     try:
-        # Check if run directory was specified
-        run_dir = args.run_dir
-        if not run_dir:
-            # Create a new run directory
-            run_dir = Path("/app/sandbox/writable") / f"run_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
+        # Import your path utility
+        from core.utils.path_utils import get_active_run_path
+        
+        # Use the existing run directory instead of creating a new one
+        if args.run_dir:
+            # If run directory was explicitly specified via args
+            run_dir = Path(args.run_dir)
             run_dir.mkdir(parents=True, exist_ok=True)
         else:
-            run_dir = Path(run_dir)
-            run_dir.mkdir(parents=True, exist_ok=True)
+            # Get the run directory that was already created by the entrypoint script
+            try:
+                run_dir = get_active_run_path()
+                # No need to mkdir as it should already exist
+            except FileNotFoundError:
+                # Fallback only if the file doesn't exist (shouldn't happen if entrypoint.sh ran correctly)
+                logger = setup_logging()
+                logger.warning("Active run path file not found, creating a new run directory")
+                run_dir = Path("/app/sandbox/writable") / f"run_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
+                run_dir.mkdir(parents=True, exist_ok=True)
+            
+        # Set up logging using the utility function
+        logger = setup_logging(run_dir=run_dir)
+            
+        # Log startup information
+        logger.info("Starting AI Research Agent")
+        logger.info(f"Using configuration file: {args.config}")
+        logger.info(f"Using run directory: {run_dir}")
+        
+        # No need to create active_run_path_file as it should already exist
+        # Just log that we're using it
+        logger.info(f"Using active run path: {run_dir}")
             
         # Set up logging using the utility function
         logger = setup_logging(run_dir=run_dir)

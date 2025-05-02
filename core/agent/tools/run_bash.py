@@ -13,8 +13,8 @@ from langchain.tools import BaseTool
 class RunBashTool(BaseTool):
     """Tool for running bash commands in a specified working directory."""
     
-    name = "run_bash"
-    description = """
+    name: str = "run_bash"
+    description: str = """
     Use this tool to run bash commands.
     You must provide the command to run.
     The command will be run in the specified working directory.

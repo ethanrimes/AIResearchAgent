@@ -1,15 +1,18 @@
 import pytest
 from pathlib import Path
 import sys
+import os
+
 # Add the app directory to Python path
 sys.path.append('/app')
 from sandbox.read_only.dataloader.rstar_data_loader import rStarDataLoader
 
 @pytest.fixture
 def loader():
-    # Data is now located in /app/data/rstar directory
-    path = "/app/data/rstar/amc23_test.json"
-    return rStarDataLoader(path)
+    # Set environment variable for the dataset path
+    os.environ["DATASET_PATH"] = "/app/data/rstar/amc23_test.json"
+    # Create the loader instance
+    return rStarDataLoader()
 
 def test_load_amc23(loader):
     problems = loader.load()

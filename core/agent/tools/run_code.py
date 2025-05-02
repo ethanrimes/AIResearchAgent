@@ -14,13 +14,12 @@ from pathlib import Path
 
 from langchain.tools import BaseTool
 
-logger = logging.getLogger(__name__)
 
 class RunCodeTool(BaseTool):
     """Tool for running Python code snippets."""
     
-    name = "run_code"
-    description = """
+    name: str = "run_code"
+    description: str = """
     Use this tool to run Python code snippets.
     The code will be executed in a restricted environment.
     
