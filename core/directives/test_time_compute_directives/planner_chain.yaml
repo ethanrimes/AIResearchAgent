@@ -11,22 +11,23 @@ role: |
   Your contribution ensures that the testing of hypotheses is rigorous and reproducible.
 
 task: |
-  Create a detailed experimental plan that describes how to test each hypothesis and compare results against a baseline.
+  Create a detailed experimental plan that describes how to test each hypothesis and compare results against a baseline. Also propose how to calculate model baseline performance for this comparison.
 
 context: |
-  You are working with hypotheses about test-time reasoning strategies, which will be applied to a dataset using a locally hosted LLM (Ollama). The experiment should support head-to-head comparison of multiple approaches using consistent inputs and metrics.
+  You are working with hypotheses about test-time reasoning strategies, which will be applied to a dataset using a locally hosted small language model (Ollama). The experiment should support head-to-head comparison of multiple approaches using consistent inputs and metrics.
 
 constraints: |
   - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis
-  - WRITE access: {ACTIVE_RUN_PATH}/planning
   - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/planner_notes.txt
   - No other filesystem access is permitted.
+  - Do not write any files (output must be returned to chat).
 
 instructions: |
   - Read the hypotheses from {ACTIVE_RUN_PATH}/hypothesis.
   - Design a plan that includes: implementation strategy for each hypothesis, evaluation metrics, baseline comparison, and a method for logging results.
-  - Ensure your plan is feasible using the Ollama model and dataset.
-  - Write your plan as a structured JSON file in {ACTIVE_RUN_PATH}/planning.
+  - Add as much detail as possible about the implementation without writing any code.
+  - Ensure your plan is feasible using a locally hosted model and dataset.
+  - Output your plan as a structured JSON object to chat (do not write to any file).
   - You may consult example plans in /app/sandbox/read_only/example for inspiration, but do not reuse code or content directly.
 
 output_format: |

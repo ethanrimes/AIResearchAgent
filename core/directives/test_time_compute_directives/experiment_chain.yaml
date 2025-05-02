@@ -18,35 +18,38 @@ context: |
 
 constraints: |
   - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning
-  - WRITE access: {ACTIVE_RUN_PATH}/experiment, {ACTIVE_RUN_PATH}/results
+  - WRITE access: {ACTIVE_RUN_PATH}/experiment
   - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/experiment_notes.txt
-  - EXECUTION: Bash commands may only be run from {ACTIVE_RUN_PATH}/experiment with output directed to {ACTIVE_RUN_PATH}/results
+  - EXECUTION: Bash commands may be run with the RunBashTool from {ACTIVE_RUN_PATH}/experiment. Results may only be written to {ACTIVE_RUN_PATH}/results. 
+  - EXECUTION: RunCodeTool may be used to test small snippets of code
   - Do not access any other directories.
 
 instructions: |
   - Read the hypotheses from {ACTIVE_RUN_PATH}/hypothesis and the experiment plan from {ACTIVE_RUN_PATH}/planning.
-  - Implement the experiments inside the {ACTIVE_RUN_PATH}/experiment directory.
-  - Use the following tools from /app/sandbox/read_only:
-      - **dataloader/rstar_data_loader.py**: Load the test dataset. The dataset path is defined in this module.
-      - **evaluator/answer_evaluation.py**: Extract final answers and evaluate correctness.
-      - **models/ollama_client.py**: Interact with the Ollama LLM server running locally.
-        - Use it to send prompts, retrieve responses, and apply different reasoning strategies (e.g., chain-of-thought, verification, etc.).
+  - Implement an experiment to test the hypotheses according to the plan in planning, writing all code to the {ACTIVE_RUN_PATH}/experiment directory.
+  - Determine the directory structure of this experiment before you write any code
+  - The experiment must:
+    - Use the specified bash script as an entry point
+    - Assess the model baseline performance on the math data set
+    - Test each hypothesis individually
+    - Collect results according to the specified schema
+  - The following modules must be imported and used in the experiment code. They cannot be edited or changed.
+    - **dataloader/rstar_data_loader.py**: This loads the target dataset. The dataset path is defined in this module and cannot be changed.
+    - **evaluator/answer_evaluation.py**: This extract final answers and evaluates their correctness.
+    - **models/ollama_client.py**: This is the interface with which to interact with the locally hosted LLM server, which you will use to run your inference/test time compute experiments.
+  - Iteratively refine your code, testing the entry point with the RunCodeTool. Do not leave until you have obtained satisfactory results from the experiment.
   - Write modular code: define one function per hypothesis and one for the baseline.
   - Use logging and error handling to make the experiment repeatable and debuggable.
   - Run the full experiment and write the results (including correctness, reasoning trace, and timing) to a JSON file in {ACTIVE_RUN_PATH}/results.
   - You may consult example code at /app/sandbox/read_only/example for structure or inspiration, but do not copy code directly.
-
-output_format: |
-  Your implementation should include these Python files:
   
-  Your final results should be written to a JSON file with the following structure:
-  
+  - The final statistics your code generates should output to {ACTIVE_RUN_PATH}/results/result_summary.json the following schema:
   ```json
   {{
     "experiment_results": {{
       "baseline": {{
         "accuracy": 0.0,
-        "examples": [
+        "test_questions": [
           {{
             "problem_id": "...",
             "question": "...",
@@ -55,7 +58,7 @@ output_format: |
             "is_correct": true/false,
             "execution_time": 0.0
           }},
-          // Additional examples...
+          // Additional questions...
         ],
         "summary": {{
           "total_problems": 0,
@@ -68,8 +71,8 @@ output_format: |
         {{
           "id": "H1",
           "accuracy": 0.0,
-          "examples": [
-            // Similar to baseline examples
+          "test_questions": [
+            // Similar to baseline questions
           ],
           "summary": {{
             // Similar to baseline summary
@@ -77,13 +80,14 @@ output_format: |
         }},
         // Additional hypotheses...
       ],
-      "comparison": {{
-        "best_performing": "ID of best performing approach",
-        "accuracy_improvements": {{
-          "H1": 0.0, // Improvement over baseline
-          // Additional hypotheses...
-        }}
-      }}
     }}
   }}
   ```
+
+output_format: |
+- When satisfied **stop** tool calls and output a brief plain-text summary (no JSON) that lists:
+  - Files created/modified
+  - How to run the experiment
+  - Where the results are stored and in what format
+  
+  

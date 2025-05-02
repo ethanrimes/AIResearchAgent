@@ -18,7 +18,6 @@ from langchain.agents import AgentExecutor, create_structured_chat_agent
 
 # Import custom tools
 from core.agent.tools.read_file import ReadFileTool
-# WRITE-file tool removed
 
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
 from core.agent.tools.write_to_scratchpad import WriteScratchpadTool

@@ -18,16 +18,16 @@ context: |
 
 constraints: |
   - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning, {ACTIVE_RUN_PATH}/experiment, {ACTIVE_RUN_PATH}/results
-  - WRITE access: {ACTIVE_RUN_PATH}/findings
   - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/evaluator_notes.txt
   - No other filesystem access is allowed.
+  - Do not write any files (output must be returned to chat).
 
 instructions: |
   - Read the hypotheses, experiment plan, implementation code, and experiment results.
   - Compare all tested strategies against the baseline using performance metrics such as correctness, reasoning trace, and runtime.
   - Look for patterns in where and how each strategy succeeded or failed.
   - Propose insights that explain the observed performance differences.
-  - Write your final findings as a JSON file in {ACTIVE_RUN_PATH}/findings.
+  - Output your final findings as a structured JSON object to chat (do not write to any file).
   - You may refer to /app/sandbox/read_only/example for example analysis formats or structures, but do not reuse text directly.
 
 output_format: |

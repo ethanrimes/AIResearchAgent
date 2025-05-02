@@ -1,23 +1,33 @@
 """
 Experiment Chain module for the AI Research Agent.
 
-This module is responsible for implementing and running the experiments
-planned by the PlannerChain. It iteratively writes, revises, and executes
-code to test the hypotheses.
+This chain turns the high-level plan into an executable project, makes the
+agent populate a bash launcher script, then executes that script itself.
+
+Workflow enforced here
+----------------------
+1. The agent is instructed to create *all* source files plus a bash script
+   called `run_experiment.sh` inside `{ACTIVE_RUN_PATH}/experiment`.
+2. After the agent stops tool calls and emits its plain-text summary,
+   this chain immediately executes that bash script via `RunBashTool`.
+3. The bash script must write `results_summary.json` to
+   `{ACTIVE_RUN_PATH}/results` following the evaluator-directive schema.
 """
 
-import os
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Any
 
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.tools import BaseTool
 from langchain.agents import AgentExecutor, create_structured_chat_agent
 
-# Import custom tools
+# ----------------------------------------------------------------------
+# Custom tools
+# ----------------------------------------------------------------------
 from core.agent.tools.read_file import ReadFileTool
 from core.agent.tools.write_file import WriteFileTool
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
@@ -25,94 +35,101 @@ from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
 from core.agent.tools.run_bash import RunBashTool
 from core.agent.tools.run_code import RunCodeTool
 
+# ----------------------------------------------------------------------
 class ExperimentChain:
     """
-    Chain responsible for implementing and running experiments.
+    Implements, runs, and verifies the experiments.
     """
-    
-    def __init__(self, llm, workspace: Dict[str, Path], directive: str, max_iterations: int = 10):
-        """
-        Initialize the ExperimentChain.
-        
-        Args:
-            llm: The language model to use.
-            workspace: Dictionary containing paths to workspace directories.
-            directive: The system directive for the agent.
-            max_iterations: Maximum number of iterations for code revisions.
-        """
+
+    ENTRY_SCRIPT = "run_experiment.sh"
+
+    # ------------------------------------------------------------------
+    def __init__(
+        self,
+        llm,
+        workspace: Dict[str, Path],
+        directive: str,
+        max_iterations: int = 10,
+    ):
         self.llm = llm
         self.workspace = workspace
         self.directive = directive
         self.max_iterations = max_iterations
-        self.output_dir = workspace["experiment"]
+
+        # Short-hand directories
+        self.exp_dir = workspace["experiment"]
         self.results_dir = workspace["results"]
+        self.entry_script_path = self.exp_dir / self.ENTRY_SCRIPT
         self.scratchpad_file = workspace["scratchpad"] / "experiment_notes.txt"
 
         self.logger = logging.getLogger("ai_research_agent.experiment_chain")
-        
-        # Initialize tools
+
+        # Ensure experiment directory exists (entry script will be created by agent)
+        self.exp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialise tool set + agent
         self.tools = self._init_tools()
-        
-        # Initialize agent
         self.agent = self._init_agent()
-        
-        self.logger.info("ExperimentChain initialized")
-        
+
+        self.logger.info(
+            "ExperimentChain initialised (max_iterations=%s)", self.max_iterations
+        )
+
+    # ------------------------------------------------------------------
+    # Tooling
+    # ------------------------------------------------------------------
     def _init_tools(self) -> List[BaseTool]:
-        """
-        Initialize the tools for the experiment agent.
-        
-        Returns:
-            List of tools.
-        """
-        # For experiment chain, we can read from read_only, hypothesis, and planning, 
-        # but write only to experiment and results
+        """Create tool instances and keep a reference to RunBash for later."""
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"]),
                 str(self.workspace["hypothesis"]),
-                str(self.workspace["planning"])
+                str(self.workspace["planning"]),
             ]
         )
-        
+
         write_tool = WriteFileTool(
-            allowed_dirs=[
-                str(self.workspace["experiment"]),
-                str(self.workspace["results"])
-            ]
+            allowed_dirs=[str(self.exp_dir)]
         )
-        
+
         read_scratchpad_tool = ReadScratchpadTool(
             scratchpad_file=str(self.scratchpad_file)
         )
-        
         write_scratchpad_tool = WriteScratchpadTool(
             scratchpad_file=str(self.scratchpad_file)
         )
-        
-        run_bash_tool = RunBashTool(
-            working_dir=str(self.workspace["experiment"]),
-            output_dir=str(self.workspace["results"])
+
+        self.run_bash_tool = RunBashTool(
+            working_dir=str(self.exp_dir), output_dir=str(self.results_dir)
         )
-        
+
         run_code_tool = RunCodeTool()
-        
+
         return [
             read_tool,
             write_tool,
             read_scratchpad_tool,
             write_scratchpad_tool,
-            run_bash_tool,
-            run_code_tool
+            self.run_bash_tool,  # keep reference
+            run_code_tool,
         ]
-        
+
+    # ------------------------------------------------------------------
+    # Agent
+    # ------------------------------------------------------------------
     def _init_agent(self) -> AgentExecutor:
-        """
-        Initialize the experiment agent.
-        """
+        """Structured-chat agent that does the implementation work."""
         prompt = PromptTemplate.from_template(
             template=(
                 f"{self.directive}\n\n"
+                "## System-enforced requirements\n"
+                f"- You have **{self.max_iterations} revision cycles**.\n"
+                f"- Write your experiment entrypoint to the bash file:\n"
+                f"  `{self.entry_script_path}`\n"
+                "- All code must live inside `{ACTIVE_RUN_PATH}/experiment`.\n"
+                "- Running the script must create "
+                f"`{self.results_dir}/results_summary.json` "
+                "conforming to the evaluator-directive schema.\n"
                 "Tool names you can call: {tool_names}\n\n"
                 "Full tool descriptions:\n{tools}\n\n"
                 "{input}\n\n"
@@ -124,50 +141,83 @@ class ExperimentChain:
             llm=self.llm,
             tools=self.tools,
             prompt=prompt,
-            stop_sequence=False
+            stop_sequence=False,
         )
 
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
             verbose=True,
-            max_iterations=self.max_iterations * 2
+            # allow think+act pairs
+            max_iterations=self.max_iterations * 2,
         )
-        
+
+    # ------------------------------------------------------------------
+    # Execution
+    # ------------------------------------------------------------------
     def run(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Run the experiment implementation and execution process.
-        
-        Args:
-            plan_data: The experiment plan generated by the PlannerChain.
-            
+        Run the experiment chain.
+
         Returns:
-            Dict containing the experiment results.
+            dict  {
+              "summary": <plain-text returned by agent>,
+              "bash_output": <stdout/stderr from script run>,
+              "results": <dict parsed from results_summary.json>
+            }
         """
-        self.logger.info("Running experiment implementation and execution")
-        
+        self.logger.info("=== ExperimentChain starting ===")
+
+        # Paths the agent must read
         plan_file = self.workspace["planning"] / "experiment_plan.json"
-        results_summary_file = self.results_dir / "results_summary.json"
-        
-        # Create minimal input with file paths and iteration limit - directive contains the main instructions
+        results_json = self.results_dir / "results_summary.json"
+
+        # ------------------------------------------------------------------
+        # 1) Let the agent do its work
+        # ------------------------------------------------------------------
         agent_input = {
-            "input": f"Read the experiment plan from: {plan_file}\nYou can iteratively revise your code up to {self.max_iterations} times.\nWrite your final results to: {results_summary_file}"
+            "input": (
+                f"Read the experiment plan from: {plan_file}\n"
+                f"You have {self.max_iterations} revision cycles.\n"
+                "Implement the experiment, write the entrypoint bash script, "
+                "execute & iterate until the JSON results file is produced.\n"
+                "Finally output your plain-text summary."
+            )
         }
-        
-        # Run the agent
-        result = self.agent.invoke(agent_input)
-        
-        # Check if the results file was created
-        if not results_summary_file.exists():
-            self.logger.error(f"Experiment agent failed to create results file: {results_summary_file}")
-            raise FileNotFoundError(f"Experiment results file not found: {results_summary_file}")
-            
-        # Load and return the experiment results
+
+        summary_text: str = self.agent.invoke(agent_input)
+
+        # ------------------------------------------------------------------
+        # 2) Execute the generated bash script
+        # ------------------------------------------------------------------
+        if not self.entry_script_path.exists():
+            msg = f"Expected entry script not found: {self.entry_script_path}"
+            self.logger.error(msg)
+            raise FileNotFoundError(msg)
+
+        self.logger.info("Running generated bash script via RunBashTool")
+        bash_output: str = self.run_bash_tool._run(f"bash {self.entry_script_path}")
+
+        # ------------------------------------------------------------------
+        # 3) Validate & load results JSON
+        # ------------------------------------------------------------------
+        if not results_json.exists():
+            msg = (
+                "Bash script completed but results_summary.json not found at "
+                f"{results_json}"
+            )
+            self.logger.error(msg)
+            raise FileNotFoundError(msg)
+
         try:
-            with open(results_summary_file, 'r') as f:
-                experiment_results = json.load(f)
-            self.logger.info("Experiment completed and results generated")
-            return experiment_results
+            results_dict: Dict[str, Any] = json.loads(results_json.read_text())
         except Exception as e:
-            self.logger.error(f"Error loading experiment results file: {e}")
+            self.logger.error("Failed to parse results JSON: %s", e)
             raise
+
+        self.logger.info("=== ExperimentChain finished successfully ===")
+        return {
+            "summary": summary_text,
+            "bash_output": bash_output,
+            "results": results_dict,
+        }
