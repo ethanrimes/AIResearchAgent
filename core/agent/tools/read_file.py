@@ -33,10 +33,10 @@ class ReadFileTool(BaseTool):
         Args:
             allowed_dirs: List of directories that this tool is allowed to read from.
         """
-        super().__init__()
-        self.allowed_dirs = [Path(d).resolve() for d in allowed_dirs]
-        self.logger = logging.getLogger("ai_research_agent.read_file")
-        self.logger.info(f"ReadFileTool initialized with allowed dirs: {allowed_dirs}")
+        allowed_dirs_resolved = [Path(d).resolve() for d in allowed_dirs]
+        logger = logging.getLogger("ai_research_agent.read_file")
+        super().__init__(allowed_dirs=allowed_dirs_resolved, logger=logger)
+        logger.info(f"ReadFileTool initialized with allowed dirs: {allowed_dirs}")
         
     def _is_path_allowed(self, file_path: Path) -> bool:
         """

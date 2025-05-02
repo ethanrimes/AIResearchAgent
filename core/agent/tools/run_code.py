@@ -42,10 +42,10 @@ class RunCodeTool(BaseTool):
         Args:
             max_execution_time: Maximum execution time in seconds (currently not enforced).
         """
-        super().__init__()
-        self.max_execution_time = max_execution_time
-        self.logger = logging.getLogger("ai_research_agent.run_code")
-        self.logger.info(f"RunCodeTool initialized with max execution time: {max_execution_time}")
+        logger = logging.getLogger("ai_research_agent.run_code")
+        super().__init__(max_execution_time=max_execution_time, logger=logger)
+        logger.info(f"RunCodeTool initialized with max execution time: {max_execution_time}")
+
         
     def _run(self, code: str) -> str:
         """

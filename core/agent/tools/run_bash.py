@@ -42,18 +42,18 @@ class RunBashTool(BaseTool):
             output_dir: Directory to write command output to. If not provided, 
                        output will only be returned to the caller.
         """
-        super().__init__()
-        self.working_dir = Path(working_dir).resolve()
-        self.output_dir = Path(output_dir).resolve() if output_dir else None
-        self.logger = logging.getLogger("ai_research_agent.run_bash")
-        self.logger.info(f"RunBashTool initialized with working directory: {working_dir}")
+        working_dir_path = Path(working_dir).resolve()
+        output_dir_path = Path(output_dir).resolve() if output_dir else None
+        logger = logging.getLogger("ai_research_agent.run_bash")
+        super().__init__(working_dir=working_dir_path, output_dir=output_dir_path, logger=logger)
+        logger.info(f"RunBashTool initialized with working directory: {working_dir}")
         if output_dir:
-            self.logger.info(f"RunBashTool output directory: {output_dir}")
-        
+            logger.info(f"RunBashTool output directory: {output_dir}")
+
         # Create the directories if they don't exist
-        self.working_dir.mkdir(parents=True, exist_ok=True)
-        if self.output_dir:
-            self.output_dir.mkdir(parents=True, exist_ok=True)
+        working_dir_path.mkdir(parents=True, exist_ok=True)
+        if output_dir_path:
+            output_dir_path.mkdir(parents=True, exist_ok=True)
         
     def _run(self, command: str) -> str:
         """

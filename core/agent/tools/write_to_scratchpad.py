@@ -46,15 +46,15 @@ class WriteScratchpadTool(BaseTool):
         Args:
             scratchpad_file: Path to the scratchpad file.
         """
-        super().__init__()
-        self.scratchpad_file = Path(scratchpad_file)
-        self.logger = logging.getLogger("ai_research_agent.write_to_scratchpad")
-        self.logger.info(f"WriteScratchpadTool initialized with scratchpad file: {scratchpad_file}")
-        
+        scratchpad_file_path = Path(scratchpad_file)
+        logger = logging.getLogger("ai_research_agent.write_to_scratchpad")
+        super().__init__(scratchpad_file=scratchpad_file_path, logger=logger)
+        logger.info(f"WriteScratchpadTool initialized with scratchpad file: {scratchpad_file}")
+
         # Create the file if it doesn't exist
-        self.scratchpad_file.parent.mkdir(parents=True, exist_ok=True)
-        if not self.scratchpad_file.exists():
-            with open(self.scratchpad_file, 'w', encoding='utf-8') as f:
+        scratchpad_file_path.parent.mkdir(parents=True, exist_ok=True)
+        if not scratchpad_file_path.exists():
+            with open(scratchpad_file_path, 'w', encoding='utf-8') as f:
                 f.write("")
         
     def _run(self, input_dict) -> str:
