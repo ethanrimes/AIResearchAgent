@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 
+from core.utils.path_utils import get_active_run_timestamp
+
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.schema import SystemMessage
@@ -40,7 +42,11 @@ class Agent:
         """
         self.logger = logging.getLogger("ai_research_agent.agent")
         self.config = self._load_config(config_path)
-        self.run_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        try:
+            self.run_id = get_active_run_timestamp()
+        except Exception:
+            # No active run yet – fall back to "now"
+            self.run_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         self.workspace = self._setup_workspace()
         
         # Initialize the LLM for the agents

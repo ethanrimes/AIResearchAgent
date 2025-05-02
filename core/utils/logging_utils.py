@@ -8,6 +8,8 @@ import os
 import logging
 from pathlib import Path
 from datetime import datetime
+from core.utils.path_utils import get_active_run_timestamp
+
 
 def setup_logging(run_dir=None, level=logging.INFO, log_name=None):
     """
@@ -49,7 +51,10 @@ def setup_logging(run_dir=None, level=logging.INFO, log_name=None):
         
         # Create log filename
         if log_name is None:
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            try:
+                timestamp = get_active_run_timestamp()
+            except Exception:
+                timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
             log_name = f"experiment_{timestamp}.log"
         
         # Create file handler
