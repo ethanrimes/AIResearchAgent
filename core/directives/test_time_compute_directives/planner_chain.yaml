@@ -38,13 +38,13 @@ output_format: |
       "title": "Brief title for the experiment",
       "description": "Overall description of the experiment",
       "baseline": {{
-        "description": "Description of the baseline approach",
+        "description": "Description of the how the baseline model performance will be calculated",
         "implementation": "How the baseline will be implemented"
       }},
       "hypotheses_testing": [
         {{
           "hypothesis_id": "H1",
-          "implementation": "How this hypothesis will be implemented",
+          "implementation": "How this hypothesis's potential will be tested. Elaborate all steps in full",
           "expected_outcome": "What you expect to observe if the hypothesis is correct"
         }},
         // Additional hypotheses...

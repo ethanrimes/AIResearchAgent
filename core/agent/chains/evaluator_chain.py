@@ -18,9 +18,13 @@ from langchain.agents import AgentExecutor, create_structured_chat_agent
 
 # Import custom tools
 from core.agent.tools.read_file import ReadFileTool
-from core.agent.tools.write_file import WriteFileTool
+# WRITE-file tool removed
+
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
 from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
+
+from core.agent.schemas.output_schemas import EvaluatorOutput
+from core.utils.path_utils import get_active_run_path
 
 class EvaluatorChain:
     """
@@ -59,8 +63,7 @@ class EvaluatorChain:
         Returns:
             List of tools.
         """
-        # For evaluator chain, we can read from read_only, hypothesis, planning, experiment, and results, 
-        # but write only to findings
+        # For evaluator chain, we can read from read_only, hypothesis, planning, experiment, and results
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"]),
@@ -68,12 +71,6 @@ class EvaluatorChain:
                 str(self.workspace["planning"]),
                 str(self.workspace["experiment"]),
                 str(self.workspace["results"])
-            ]
-        )
-        
-        write_tool = WriteFileTool(
-            allowed_dirs=[
-                str(self.workspace["findings"])
             ]
         )
         
@@ -87,7 +84,6 @@ class EvaluatorChain:
         
         return [
             read_tool,
-            write_tool,
             read_scratchpad_tool,
             write_scratchpad_tool
         ]
@@ -109,7 +105,8 @@ class EvaluatorChain:
         agent = create_structured_chat_agent(
             llm=self.llm,
             tools=self.tools,
-            prompt=prompt
+            prompt=prompt,
+            stop_sequence=False
         )
 
         return AgentExecutor(
@@ -131,29 +128,32 @@ class EvaluatorChain:
         """
         self.logger.info("Running result evaluation and generating findings")
         
+        # ------------------------------------------------------------------
+        # Build output path dynamically from the active run directory
+        # ------------------------------------------------------------------
+        run_dir = get_active_run_path()
+        output_path = run_dir / "findings" / "final_findings.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Find file paths to reference in the input
         hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
         plan_file = self.workspace["planning"] / "experiment_plan.json"
         results_file = self.workspace["results"] / "results_summary.json"
         
-        # Create minimal input with file paths - directive contains the main instructions
-        agent_input = {
-            "input": f"Read the hypotheses from: {hypothesis_file}\nRead the experiment plan from: {plan_file}\nRead the experiment results from: {results_file}\nWrite your final findings to: {self.output_file}"
-        }
+        # ------------------------------------------------------------------
+        # Structured invocation
+        # ------------------------------------------------------------------
+        runnable = self.agent.with_structured_output(EvaluatorOutput)
+        result: EvaluatorOutput = runnable.invoke(
+            {"input": f"Read the hypotheses from: {hypothesis_file}\n"
+                      f"Read the experiment plan from: {plan_file}\n"
+                      f"Read the experiment results from: {results_file}\n"
+                      f"Evaluate these results and return your findings following "
+                      f"the required JSON schema."}
+        )
         
-        # Run the agent
-        result = self.agent.invoke(agent_input)
+        # Persist
+        output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+        self.logger.info(f"Wrote final findings to {output_path}")
         
-        # Check if the output file was created
-        if not self.output_file.exists():
-            self.logger.error(f"Evaluator agent failed to create output file: {self.output_file}")
-            raise FileNotFoundError(f"Findings output file not found: {self.output_file}")
-            
-        # Load and return the findings
-        try:
-            with open(self.output_file, 'r') as f:
-                findings = json.load(f)
-            self.logger.info("Evaluation completed and findings generated")
-            return findings
-        except Exception as e:
-            self.logger.error(f"Error loading findings output file: {e}")
-            raise
+        return result.model_dump()

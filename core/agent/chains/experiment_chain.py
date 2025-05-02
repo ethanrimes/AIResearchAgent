@@ -123,7 +123,8 @@ class ExperimentChain:
         agent = create_structured_chat_agent(
             llm=self.llm,
             tools=self.tools,
-            prompt=prompt
+            prompt=prompt,
+            stop_sequence=False
         )
 
         return AgentExecutor(

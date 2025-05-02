@@ -18,9 +18,13 @@ from langchain.agents import AgentExecutor, create_structured_chat_agent
 
 # Import custom tools
 from core.agent.tools.read_file import ReadFileTool
-from core.agent.tools.write_file import WriteFileTool
+# WRITE-file tool removed
+
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
 from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
+
+from core.agent.schemas.output_schemas import PlannerOutput
+from core.utils.path_utils import get_active_run_path
 
 class PlannerChain:
     """
@@ -59,17 +63,11 @@ class PlannerChain:
         Returns:
             List of tools.
         """
-        # For planner chain, we can read from read_only and hypothesis, but write only to planning
+        # For planner chain, we can read from read_only and hypothesis
         read_tool = ReadFileTool(
             allowed_dirs=[
                 str(self.workspace["read_only"]),
                 str(self.workspace["hypothesis"])
-            ]
-        )
-        
-        write_tool = WriteFileTool(
-            allowed_dirs=[
-                str(self.workspace["planning"])
             ]
         )
         
@@ -83,7 +81,6 @@ class PlannerChain:
         
         return [
             read_tool,
-            write_tool,
             read_scratchpad_tool,
             write_scratchpad_tool
         ]
@@ -105,7 +102,8 @@ class PlannerChain:
         agent = create_structured_chat_agent(
             llm=self.llm,
             tools=self.tools,
-            prompt=prompt
+            prompt=prompt,
+            stop_sequence=False
         )
 
         return AgentExecutor(
@@ -127,27 +125,28 @@ class PlannerChain:
         """
         self.logger.info("Running experiment planning")
         
+        # ------------------------------------------------------------------
+        # Build output path dynamically from the active run directory
+        # ------------------------------------------------------------------
+        run_dir = get_active_run_path()
+        output_path = run_dir / "planning" / "experiment_plan.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Find the hypothesis file path to read from
         hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
         
-        # Create minimal input with file paths - directive contains the main instructions
-        agent_input = {
-            "input": f"Read the hypotheses from: {hypothesis_file}\nWrite your final plan to: {self.output_file}"
-        }
+        # ------------------------------------------------------------------
+        # Structured invocation
+        # ------------------------------------------------------------------
+        runnable = self.agent.with_structured_output(PlannerOutput)
+        result: PlannerOutput = runnable.invoke(
+            {"input": f"Read the hypotheses from: {hypothesis_file}\n"
+                      f"Generate an experiment plan based on these hypotheses and "
+                      f"return it following the required JSON schema."}
+        )
         
-        # Run the agent
-        result = self.agent.invoke(agent_input)
+        # Persist
+        output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+        self.logger.info(f"Wrote experiment plan to {output_path}")
         
-        # Check if the output file was created
-        if not self.output_file.exists():
-            self.logger.error(f"Planner agent failed to create output file: {self.output_file}")
-            raise FileNotFoundError(f"Planner output file not found: {self.output_file}")
-            
-        # Load and return the generated plan
-        try:
-            with open(self.output_file, 'r') as f:
-                plan = json.load(f)
-            self.logger.info("Generated experiment plan")
-            return plan
-        except Exception as e:
-            self.logger.error(f"Error loading planner output file: {e}")
-            raise
+        return result.model_dump()

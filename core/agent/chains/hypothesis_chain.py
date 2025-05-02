@@ -18,9 +18,13 @@ from langchain.agents import AgentExecutor, create_structured_chat_agent
 
 # Import custom tools
 from core.agent.tools.read_file import ReadFileTool
-from core.agent.tools.write_file import WriteFileTool
+# WRITE-file tool removed
+
 from core.agent.tools.read_scratchpad import ReadScratchpadTool
 from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
+
+from core.agent.schemas.output_schemas import HypothesisOutput
+from core.utils.path_utils import get_active_run_path
 
 class HypothesisChain:
     """
@@ -67,12 +71,6 @@ class HypothesisChain:
             ]
         )
         
-        write_tool = WriteFileTool(
-            allowed_dirs=[
-                str(self.workspace["hypothesis"])
-            ]
-        )
-        
         read_scratchpad_tool = ReadScratchpadTool(
             scratchpad_file=str(self.scratchpad_file)
         )
@@ -83,7 +81,6 @@ class HypothesisChain:
         
         return [
             read_tool,
-            write_tool,
             read_scratchpad_tool,
             write_scratchpad_tool
         ]
@@ -125,25 +122,24 @@ class HypothesisChain:
         """
         self.logger.info("Running hypothesis generation")
         
-        # Create input with output file path - directive contains the main instructions
-        agent_input = {
-            "input": f"Your final hypotheses should be written to: {self.output_file}"
-        }
-        
-        # Run the agent
-        result = self.agent.invoke(agent_input)
-        
-        # Check if the output file was created
-        if not self.output_file.exists():
-            self.logger.error(f"Hypothesis agent failed to create output file: {self.output_file}")
-            raise FileNotFoundError(f"Hypothesis output file not found: {self.output_file}")
-            
-        # Load and return the generated hypotheses
-        try:
-            with open(self.output_file, 'r') as f:
-                hypotheses = json.load(f)
-            self.logger.info(f"Generated {len(hypotheses['hypotheses'])} hypotheses")
-            return hypotheses
-        except Exception as e:
-            self.logger.error(f"Error loading hypothesis output file: {e}")
-            raise
+        # ------------------------------------------------------------------
+        # Build output path dynamically from the active run directory
+        # ------------------------------------------------------------------
+        run_dir = get_active_run_path()
+        output_path = run_dir / "hypothesis" / "hypotheses.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # ------------------------------------------------------------------
+        # Structured invocation
+        # ------------------------------------------------------------------
+        runnable = self.agent.with_structured_output(HypothesisOutput)
+        result: HypothesisOutput = runnable.invoke(
+            {"input": "Generate your hypotheses and return them following the "
+                      "required JSON schema."}
+        )
+
+        # Persist
+        output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+        self.logger.info(f"Wrote hypotheses to {output_path}")
+
+        return result.model_dump()
