@@ -2,142 +2,78 @@
 Tool for running Python code snippets in a safe environment.
 """
 
-import os
-import sys
 import logging
-import traceback
-from io import StringIO
-from contextlib import redirect_stdout, redirect_stderr
-from typing import Dict, Any
 import subprocess
+import sys
+import traceback
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
-from pydantic import Field
+from typing import Any
 
+from pydantic import Field
 from langchain.tools import BaseTool
+
+from core.agent.schemas.tool_schemas import RunCodeInput  # NEW
 
 
 class RunCodeTool(BaseTool):
     """Tool for running Python code snippets."""
-    
+
     name: str = "run_code"
-    description: str = """
-    Use this tool to run Python code snippets.
-    The code will be executed in a restricted environment.
-    
-    Input should be a string containing the Python code to run.
-    Output will be the stdout, stderr, and any exceptions from running the code.
-    
-    Example usage:
-    run_code("print('Hello, world!')")
-    run_code("import math\\nprint(math.sqrt(16))")
-    """
+    description: str = "Execute a Python code snippet in an isolated subprocess."
+    args_schema = RunCodeInput  # NEW
+
     max_execution_time: int = Field(default=30)
-    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
-        "ai_research_agent.run_code"), exclude=True)
-    
+    logger: logging.Logger = Field(
+        default_factory=lambda: logging.getLogger("ai_research_agent.run_code"),
+        exclude=True,
+    )
+
     def __init__(self, max_execution_time: int = 30):
-        """
-        Initialize the RunCodeTool.
-        
-        Args:
-            max_execution_time: Maximum execution time in seconds (currently not enforced).
-        """
         logger = logging.getLogger("ai_research_agent.run_code")
         super().__init__(max_execution_time=max_execution_time, logger=logger)
-        logger.info(f"RunCodeTool initialized with max execution time: {max_execution_time}")
 
-        
+    # --------------------------------------------------
     def _run(self, code: str) -> str:
-        """
-        Run Python code and return the results.
-        
-        Args:
-            code: The Python code to run.
-            
-        Returns:
-            The stdout, stderr, and any exceptions from running the code.
-        """
         if not code:
             return "ERROR: No code provided."
-            
-        # Create string buffers to capture stdout and stderr
-        stdout_capture = StringIO()
-        stderr_capture = StringIO()
-        
+
+        stdout_buf, stderr_buf = StringIO(), StringIO()
+
         try:
-            self.logger.info("Running Python code snippet")
-            
-            # Use a temporary file to store the code
             import tempfile
-            with tempfile.TemporaryDirectory() as tempdir:
-                script_path = Path(tempdir) / "user_script.py"
-                with open(script_path, 'w', encoding='utf-8') as f:
-                    f.write(code)
-                
-                # Redirect stdout and stderr to our string buffers
-                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    # Execute the code in a separate process
-                    # This provides better isolation than exec()
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                script_path = Path(tmpdir) / "snippet.py"
+                script_path.write_text(code, encoding="utf-8")
+
+                with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
                     result = subprocess.run(
                         [sys.executable, str(script_path)],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         timeout=self.max_execution_time,
-                        text=True
+                        text=True,
                     )
-                    
-                    # Add captured output to our buffers
-                    stdout_capture.write(result.stdout)
-                    stderr_capture.write(result.stderr)
-                
-            # Get the captured output
-            stdout = stdout_capture.getvalue()
-            stderr = stderr_capture.getvalue()
-            
-            # Prepare the result
-            result = ""
+                    stdout_buf.write(result.stdout)
+                    stderr_buf.write(result.stderr)
+
+            stdout, stderr = stdout_buf.getvalue(), stderr_buf.getvalue()
+            if not stdout and not stderr:
+                return "Code executed successfully with no output."
+
+            out = ""
             if stdout:
-                result += f"STDOUT:\n{stdout}\n"
+                out += f"STDOUT:\n{stdout}\n"
             if stderr:
-                result += f"STDERR:\n{stderr}\n"
-                
-            if not result:
-                result = "Code executed successfully with no output."
-                
-            self.logger.info("Code executed successfully")
-            return result
-            
+                out += f"STDERR:\n{stderr}\n"
+            return out
         except subprocess.TimeoutExpired:
-            stderr = f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
-            self.logger.error(stderr)
-            return stderr
+            return f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
         except Exception as e:
-            # Get the traceback
             tb = traceback.format_exc()
-            
-            # Get any captured output
-            stdout = stdout_capture.getvalue()
-            stderr = stderr_capture.getvalue()
-            
-            # Prepare the result
-            result = f"ERROR: {str(e)}\n\nTraceback:\n{tb}\n"
-            
-            if stdout:
-                result += f"\nSTDOUT (before error):\n{stdout}\n"
-            if stderr:
-                result += f"\nSTDERR (before error):\n{stderr}\n"
-                
-            self.logger.error(f"Error executing code: {str(e)}")
-            return result
-    
+            return f"ERROR: {str(e)}\n\nTraceback:\n{tb}"
+
     async def _arun(self, code: str) -> str:
-        """
-        Async version of _run.
-        
-        Args:
-            code: The Python code to run.
-            
-        Returns:
-            The stdout, stderr, and any exceptions from running the code.
-        """
         return self._run(code)

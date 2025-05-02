@@ -12,8 +12,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
+import openai          # <-- add
 
 from core.utils.path_utils import get_active_run_timestamp
+# from langchain_core.callbacks.streaming_stdout import StdOutCallbackHandler
 
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
@@ -125,8 +127,15 @@ class Agent:
         Returns:
             Initialized LLM.
         """
+        openai.base_url = "https://api.openai.com/v1"
+        self.logger.info(f"Using OpenAI base URL: {openai.base_url}")
+
+        # handler = StdOutCallbackHandler()
+
         return ChatOpenAI(
             model=self.config["agent_model"],
+            # callbacks=[handler],
+            # verbose=True
             # temperature=0.0,  # Use deterministic outputs for research
         )
         

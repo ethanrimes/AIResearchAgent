@@ -43,10 +43,6 @@ output_format: |
         "testability": "How this hypothesis can be tested with the available resources"
       }},
       // Additional hypotheses...
-    ],
-    "meta": {{
-      "timestamp": "YYYY-MM-DDTHH:MM:SS",
-      "dataset_analyzed": "Name of dataset analyzed"
-    }}
+    ]
   }}
   ```

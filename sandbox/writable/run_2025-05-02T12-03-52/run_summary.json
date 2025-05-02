@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "run_id": "2025-05-02T12-03-52",
+  "elapsed_time": 0.9027159214019775,
+  "error": "Error code: 400 - {'error': {'message': \"Unsupported parameter: 'stop' is not supported with this model.\", 'type': 'invalid_request_error', 'param': 'stop', 'code': 'unsupported_parameter'}}"
+}

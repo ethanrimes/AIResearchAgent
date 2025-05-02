@@ -84,11 +84,6 @@ output_format: |
           // Additional hypotheses...
         }}
       }}
-    }},
-    "meta": {{
-      "timestamp": "YYYY-MM-DDTHH:MM:SS",
-      "dataset": "...",
-      "model": "..."
     }}
   }}
   ```

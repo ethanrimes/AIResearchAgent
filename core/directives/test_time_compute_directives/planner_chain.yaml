@@ -54,9 +54,6 @@ output_format: |
         "methodology": "How the evaluation will be conducted"
       }},
       "analysis_plan": "How the results will be analyzed and compared"
-    }},
-    "meta": {{
-      "timestamp": "YYYY-MM-DDTHH:MM:SS"
     }}
   }}
   ```

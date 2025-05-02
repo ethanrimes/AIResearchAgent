@@ -2,142 +2,103 @@
 Tool for running bash commands in a specified working directory.
 """
 
+import logging
 import os
 import subprocess
-import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
-from pydantic import Field
+from typing import Optional
 
+from pydantic import Field
 from langchain.tools import BaseTool
+
+from core.agent.schemas.tool_schemas import RunBashInput  # NEW
+
 
 class RunBashTool(BaseTool):
     """Tool for running bash commands in a specified working directory."""
-    
+
     name: str = "run_bash"
-    description: str = """
-    Use this tool to run bash commands.
-    You must provide the command to run.
-    The command will be run in the specified working directory.
-    The output will be directed to the specified output directory.
-    
-    Input should be a string containing the bash command to run.
-    Output will be the stdout and stderr from the command.
-    
-    Example usage:
-    run_bash("ls -la")
-    run_bash("python experiment.py")
-    """
+    description: str = (
+        "Run a bash command in the configured working directory. Returns the command "
+        "stdout/stderr."
+    )
+
+    args_schema = RunBashInput  # NEW
+
     working_dir: Path = Field(...)
     output_dir: Optional[Path] = None
-    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
-        "ai_research_agent.run_bash"), exclude=True)
+    logger: logging.Logger = Field(
+        default_factory=lambda: logging.getLogger("ai_research_agent.run_bash"),
+        exclude=True,
+    )
 
-    def __init__(self, working_dir: str, output_dir: str = None):
-        """
-        Initialize the RunBashTool.
-        
-        Args:
-            working_dir: Directory to run commands in.
-            output_dir: Directory to write command output to. If not provided, 
-                       output will only be returned to the caller.
-        """
+    def __init__(self, working_dir: str, output_dir: str | None = None):
         working_dir_path = Path(working_dir).resolve()
         output_dir_path = Path(output_dir).resolve() if output_dir else None
         logger = logging.getLogger("ai_research_agent.run_bash")
-        super().__init__(working_dir=working_dir_path, output_dir=output_dir_path, logger=logger)
-        logger.info(f"RunBashTool initialized with working directory: {working_dir}")
-        if output_dir:
-            logger.info(f"RunBashTool output directory: {output_dir}")
-
-        # Create the directories if they don't exist
+        super().__init__(
+            working_dir=working_dir_path, output_dir=output_dir_path, logger=logger
+        )
         working_dir_path.mkdir(parents=True, exist_ok=True)
         if output_dir_path:
             output_dir_path.mkdir(parents=True, exist_ok=True)
-        
+
+    # --------------------------------------------------
     def _run(self, command: str) -> str:
-        """
-        Run a bash command in the specified working directory.
-        
-        Args:
-            command: The bash command to run.
-            
-        Returns:
-            The stdout and stderr from the command.
-        """
         if not command:
             return "ERROR: No command provided."
-            
+
         try:
-            self.logger.info(f"Running bash command: {command}")
-            
-            # Set environment variables to restrict output
+            self.logger.info("Running bash command: %s", command)
             env = os.environ.copy()
             if self.output_dir:
                 env["OUTPUT_DIR"] = str(self.output_dir)
-            
-            # Run the command in the specified working directory
-            process = subprocess.Popen(
+
+            proc = subprocess.Popen(
                 command,
                 shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=self.working_dir,
                 env=env,
-                text=True
+                text=True,
             )
-            
-            # Get stdout and stderr
-            stdout, stderr = process.communicate(timeout=600)  # 10-minute timeout
-            return_code = process.returncode
-            
-            # Also write output to file if output_dir is specified
+            stdout, stderr = proc.communicate(timeout=600)
+            rc = proc.returncode
+
+            # Persist output if requested
             if self.output_dir:
                 import time
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                output_file = self.output_dir / f"bash_output_{timestamp}.txt"
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    f.write(f"Command: {command}\n")
-                    f.write(f"Return code: {return_code}\n\n")
+
+                ts = time.strftime("%Y%m%d_%H%M%S")
+                out_file = self.output_dir / f"bash_output_{ts}.txt"
+                with open(out_file, "w", encoding="utf-8") as f:
+                    f.write(f"Command: {command}\nReturn code: {rc}\n\n")
                     if stdout:
                         f.write(f"STDOUT:\n{stdout}\n")
                     if stderr:
                         f.write(f"STDERR:\n{stderr}\n")
-            
-            if return_code == 0:
-                self.logger.info(f"Command executed successfully with return code {return_code}")
+
+            if rc == 0:
                 if not stdout and not stderr:
                     return "Command executed successfully with no output."
-                output = ""
+                result = ""
                 if stdout:
-                    output += f"STDOUT:\n{stdout}\n"
+                    result += f"STDOUT:\n{stdout}\n"
                 if stderr:
-                    output += f"STDERR:\n{stderr}\n"
-                return output
+                    result += f"STDERR:\n{stderr}\n"
+                return result
             else:
-                self.logger.warning(f"Command failed with return code {return_code}")
-                output = f"Command failed with return code {return_code}\n"
+                result = f"Command failed with return code {rc}\n"
                 if stdout:
-                    output += f"STDOUT:\n{stdout}\n"
+                    result += f"STDOUT:\n{stdout}\n"
                 if stderr:
-                    output += f"STDERR:\n{stderr}\n"
-                return output
-                
+                    result += f"STDERR:\n{stderr}\n"
+                return result
         except subprocess.TimeoutExpired:
-            self.logger.error("Command timed out after 600 seconds")
             return "ERROR: Command timed out after 600 seconds."
         except Exception as e:
-            self.logger.error(f"Error running command: {str(e)}")
             return f"ERROR: Failed to run command: {str(e)}"
-    
+
     async def _arun(self, command: str) -> str:
-        """
-        Async version of _run.
-        
-        Args:
-            command: The bash command to run.
-            
-        Returns:
-            The stdout and stderr from the command.
-        """
         return self._run(command)

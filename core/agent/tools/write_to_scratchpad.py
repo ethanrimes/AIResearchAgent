@@ -1,108 +1,55 @@
 """
-Tool for writing to an agent's personal scratchpad.
+Tool for writing to an agent's personal scratch-pad.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from pydantic import Field
 
+from pydantic import Field
 from langchain.tools import BaseTool
 
-class WriteScratchpadTool(BaseTool):
-    """Tool for writing to an agent's personal scratchpad."""
-    
-    name: str = "write_to_scratchpad"
-    description: str = """
-    Use this tool to write content to your personal scratchpad.
-    You can use this to store your thoughts, ideas, and intermediate results.
-    
-    Input should be the content to write to the scratchpad.
-    You can choose to append or overwrite the existing content by specifying
-    'mode' as either 'append' or 'overwrite'. Default is 'append'.
-    
-    For append mode:
-    {
-        "content": "Your content here",
-        "mode": "append"
-    }
-    
-    For overwrite mode:
-    {
-        "content": "Your content here",
-        "mode": "overwrite"
-    }
-    
-    Output will be a success or error message.
-    """
-    scratchpad_file: Path = Field(...)
-    logger: logging.Logger = Field(default_factory=lambda: logging.getLogger(
-        "ai_research_agent.write_to_scratchpad"), exclude=True)
-    
-    def __init__(self, scratchpad_file: str):
-        """
-        Initialize the WriteScratchpadTool.
-        
-        Args:
-            scratchpad_file: Path to the scratchpad file.
-        """
-        scratchpad_file_path = Path(scratchpad_file)
-        logger = logging.getLogger("ai_research_agent.write_to_scratchpad")
-        super().__init__(scratchpad_file=scratchpad_file_path, logger=logger)
-        logger.info(f"WriteScratchpadTool initialized with scratchpad file: {scratchpad_file}")
+from core.agent.schemas.tool_schemas import WriteScratchpadInput  # NEW
 
-        # Create the file if it doesn't exist
-        scratchpad_file_path.parent.mkdir(parents=True, exist_ok=True)
-        if not scratchpad_file_path.exists():
-            with open(scratchpad_file_path, 'w', encoding='utf-8') as f:
-                f.write("")
-        
-    def _run(self, input_dict) -> str:
-        """
-        Write content to the scratchpad.
-        
-        Args:
-            input_dict: Dictionary containing the content to write and the mode.
-                If a string is provided, it will be treated as content in append mode.
-            
-        Returns:
-            Success or error message.
-        """
+
+class WriteScratchpadTool(BaseTool):
+    """Tool for writing to an agent's personal scratch-pad."""
+
+    name: str = "write_to_scratchpad"
+    description: str = (
+        "Store thoughts, ideas and intermediate results in a personal scratch-pad."
+    )
+    args_schema = WriteScratchpadInput  # NEW
+
+    scratchpad_file: Path = Field(...)
+    logger: logging.Logger = Field(
+        default_factory=lambda: logging.getLogger(
+            "ai_research_agent.write_to_scratchpad"
+        ),
+        exclude=True,
+    )
+
+    def __init__(self, scratchpad_file: str):
+        scratchpad_path = Path(scratchpad_file)
+        logger = logging.getLogger("ai_research_agent.write_to_scratchpad")
+        super().__init__(scratchpad_file=scratchpad_path, logger=logger)
+        scratchpad_path.parent.mkdir(parents=True, exist_ok=True)
+        scratchpad_path.touch(exist_ok=True)
+
+    # --------------------------------------------------
+    def _run(self, content: str, mode: str = "append") -> str:
         try:
-            # Handle both string and dictionary inputs
-            if isinstance(input_dict, str):
-                content = input_dict
-                mode = "append"
-            else:
-                content = input_dict.get('content', '')
-                mode = input_dict.get('mode', 'append')
-                
-            # Create parent directories if they don't exist
-            self.scratchpad_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            if mode.lower() == 'overwrite':
-                with open(self.scratchpad_file, 'w', encoding='utf-8') as f:
+            if mode.lower() == "overwrite":
+                with open(self.scratchpad_file, "w", encoding="utf-8") as f:
                     f.write(content)
-                self.logger.info(f"Successfully overwrote scratchpad")
-                return "Successfully overwrote scratchpad."
-            else:  # Default to append mode
-                with open(self.scratchpad_file, 'a', encoding='utf-8') as f:
-                    f.write(f"\n{content}" if os.path.getsize(self.scratchpad_file) > 0 else content)
-                self.logger.info(f"Successfully appended to scratchpad")
-                return "Successfully appended to scratchpad."
+                return "Successfully overwrote scratch-pad."
+            else:
+                with open(self.scratchpad_file, "a", encoding="utf-8") as f:
+                    prefix = "\n" if os.path.getsize(self.scratchpad_file) > 0 else ""
+                    f.write(f"{prefix}{content}")
+                return "Successfully appended to scratch-pad."
         except Exception as e:
-            error_msg = f"Error writing to scratchpad: {str(e)}"
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-    
-    async def _arun(self, input_dict) -> str:
-        """
-        Async version of _run.
-        
-        Args:
-            input_dict: Dictionary containing the content to write and the mode.
-            
-        Returns:
-            Success or error message.
-        """
-        return self._run(input_dict)
+            return f"ERROR: {str(e)}"
+
+    async def _arun(self, content: str, mode: str = "append") -> str:
+        return self._run(content=content, mode=mode)

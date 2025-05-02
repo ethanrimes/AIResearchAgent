@@ -68,11 +68,6 @@ output_format: |
         "Direction 1",
         // Additional directions...
       ]
-    }},
-    "meta": {{
-      "timestamp": "YYYY-MM-DDTHH:MM:SS",
-      "dataset": "...",
-      "model": "..."
     }}
   }}
   ```
