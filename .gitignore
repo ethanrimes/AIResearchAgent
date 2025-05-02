@@ -7,4 +7,12 @@ myagent-env/
 **/entrypoint_write_test.txt
 
 # Ignore all log files
-**/*.log
+**/*.logsandbox/writable/
+
+# Ignore file types recursively in sandbox/writable and its subdirectories
+sandbox/writable/**/*.txt
+sandbox/writable/**/*.json
+sandbox/writable/**/*.log
+
+# Ignore all subdirectories (their contents)
+sandbox/writable/*/
