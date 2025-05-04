@@ -1,30 +1,37 @@
 # core/utils/path_utils.py
 from pathlib import Path
 from typing import Union
+import logging
 
 def get_active_run_path():
     """
     Get the active run path from /app/active_run_path/path.txt.
-    
+
     Returns:
         Path object representing the active run path.
     """
+    import logging
     from pathlib import Path
-    
+
+    logger = logging.getLogger("ai_research_agent.path_utils")
     active_run_path_file = Path("/app/active_run_path/path.txt")
+
     if not active_run_path_file.exists():
         raise FileNotFoundError("Active run path file not found: /app/active_run_path/path.txt")
-        
+
     with open(active_run_path_file, 'r') as f:
         run_path = f.read().strip()
-        
+
     if not run_path:
         raise ValueError("Active run path is empty")
-        
+
     run_path = Path(run_path)
+    
+    logger.info(f"Active run path found: {run_path}")
+
     if not run_path.exists():
         run_path.mkdir(parents=True, exist_ok=True)
-        
+
     return run_path
 
 

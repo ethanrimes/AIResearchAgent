@@ -23,7 +23,7 @@ from typing import Dict, List, Any
 
 from langchain.prompts import PromptTemplate
 from langchain.tools import BaseTool
-from langchain.agents import AgentExecutor, create_structured_chat_agent
+from langchain.agents import AgentExecutor, create_openai_tools_agent
 
 # ----------------------------------------------------------------------
 # Custom tools
@@ -137,17 +137,17 @@ class ExperimentChain:
             )
         )
 
-        agent = create_structured_chat_agent(
+        agent = create_openai_tools_agent(
             llm=self.llm,
             tools=self.tools,
             prompt=prompt,
-            stop_sequence=False,
         )
 
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
             verbose=True,
+            handle_parsing_errors=True,
             # allow think+act pairs
             max_iterations=self.max_iterations * 2,
         )
@@ -182,7 +182,8 @@ class ExperimentChain:
                 "Implement the experiment, write the entrypoint bash script, "
                 "execute & iterate until the JSON results file is produced.\n"
                 "Finally output your plain-text summary."
-            )
+            ),
+            "ACTIVE_RUN_PATH": str(self.workspace["writable"])
         }
 
         summary_text: str = self.agent.invoke(agent_input)

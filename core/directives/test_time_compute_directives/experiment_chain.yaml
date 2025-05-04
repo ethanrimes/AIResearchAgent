@@ -17,9 +17,9 @@ context: |
   The goal is to evaluate strategies for improving LLM mathematical reasoning at test time. You will implement each strategy described in the plan and run it on a shared dataset, using the Ollama-hosted LLM. You must use specific, pre-approved modules from the read-only environment.
 
 constraints: |
-  - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning
-  - WRITE access: {ACTIVE_RUN_PATH}/experiment
-  - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/experiment_notes.txt
+  - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning. Read these files for context.
+  - WRITE access: {ACTIVE_RUN_PATH}/experiment. Write your final solution to this directory.
+  - SCRATCHPAD access: {ACTIVE_RUN_PATH}/scratchpad/experiment_notes.txt. Use this scratchpad for intermediate thinking.
   - EXECUTION: Bash commands may be run with the RunBashTool from {ACTIVE_RUN_PATH}/experiment. Results may only be written to {ACTIVE_RUN_PATH}/results. 
   - EXECUTION: RunCodeTool may be used to test small snippets of code
   - Do not access any other directories.
