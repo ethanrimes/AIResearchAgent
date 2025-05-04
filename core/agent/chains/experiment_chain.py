@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any
 
-from langchain.prompts import PromptTemplate
+from langchain.prompts import ChatPromptTemplate
 from langchain.tools import BaseTool
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 
@@ -30,8 +30,6 @@ from langchain.agents import AgentExecutor, create_openai_tools_agent
 # ----------------------------------------------------------------------
 from core.agent.tools.read_file import ReadFileTool
 from core.agent.tools.write_file import WriteFileTool
-from core.agent.tools.read_scratchpad import ReadScratchpadTool
-from core.agent.tools.write_to_scratchpad import WriteScratchpadTool
 from core.agent.tools.run_bash import RunBashTool
 from core.agent.tools.run_code import RunCodeTool
 
@@ -85,18 +83,12 @@ class ExperimentChain:
                 str(self.workspace["read_only"]),
                 str(self.workspace["hypothesis"]),
                 str(self.workspace["planning"]),
+                str(self.workspace["experiment"]),
             ]
         )
 
         write_tool = WriteFileTool(
             allowed_dirs=[str(self.exp_dir)]
-        )
-
-        read_scratchpad_tool = ReadScratchpadTool(
-            scratchpad_file=str(self.scratchpad_file)
-        )
-        write_scratchpad_tool = WriteScratchpadTool(
-            scratchpad_file=str(self.scratchpad_file)
         )
 
         self.run_bash_tool = RunBashTool(
@@ -108,8 +100,6 @@ class ExperimentChain:
         return [
             read_tool,
             write_tool,
-            read_scratchpad_tool,
-            write_scratchpad_tool,
             self.run_bash_tool,  # keep reference
             run_code_tool,
         ]
@@ -119,8 +109,8 @@ class ExperimentChain:
     # ------------------------------------------------------------------
     def _init_agent(self) -> AgentExecutor:
         """Structured-chat agent that does the implementation work."""
-        prompt = PromptTemplate.from_template(
-            template=(
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", 
                 f"{self.directive}\n\n"
                 "## System-enforced requirements\n"
                 f"- You have **{self.max_iterations} revision cycles**.\n"
@@ -129,13 +119,11 @@ class ExperimentChain:
                 "- All code must live inside `{ACTIVE_RUN_PATH}/experiment`.\n"
                 "- Running the script must create "
                 f"`{self.results_dir}/results_summary.json` "
-                "conforming to the evaluator-directive schema.\n"
-                "Tool names you can call: {tool_names}\n\n"
-                "Full tool descriptions:\n{tools}\n\n"
-                "{input}\n\n"
-                "{agent_scratchpad}"
-            )
-        )
+                "conforming to the evaluator-directive schema."
+            ),
+            ("human", "{input}"),
+            ("ai", "{agent_scratchpad}")  # Add this line with the missing variable
+        ])
 
         agent = create_openai_tools_agent(
             llm=self.llm,
