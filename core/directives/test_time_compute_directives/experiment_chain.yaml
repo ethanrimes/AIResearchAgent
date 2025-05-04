@@ -36,6 +36,7 @@ instructions: |
     - **dataloader/rstar_data_loader.py**: This loads the target dataset. The dataset path is defined in this module and cannot be changed.
     - **evaluator/answer_evaluation.py**: This extract final answers and evaluates their correctness.
     - **models/ollama_client.py**: This is the interface with which to interact with the locally hosted LLM server, which you will use to run your inference/test time compute experiments.
+  - Write the executable for this experiment at {ACTIVE_RUN_PATH}/experiment/run_experiment.sh
   - Iteratively refine your code, testing the entry point with the RunCodeTool. Do not leave until you have obtained satisfactory results from the experiment.
   - Write modular code: define one function per hypothesis and one for the baseline.
   - Use logging and error handling to make the experiment repeatable and debuggable.
