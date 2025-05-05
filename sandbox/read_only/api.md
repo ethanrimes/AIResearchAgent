@@ -1,11 +1,5 @@
 # API Interface Documentation  
 
-> Version: 0.1  
-> Status: Draft  
-> Language: English  
-
----
-
 ## 1. Overview  
 This package contains three utility modules that together form a tiny “LLM + Math-QA” pipeline:
 

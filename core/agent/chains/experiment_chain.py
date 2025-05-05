@@ -175,65 +175,196 @@ class ExperimentChain:
         # Paths the agent must read
         plan_file = self.workspace["planning"] / "experiment_plan.json"
         results_json = self.results_dir / "results_summary.json"
+        hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
+        api_doc_file = Path("/app/sandbox/read_only/api.md")
+
+        # Track the state of validation
+        validation_passed = False
+        agent_output = None
+        bash_output = ""
+        
+        # Initialize current iteration counter
+        current_iteration = 0
 
         # ------------------------------------------------------------------
-        # 1) Let the agent do its work
+        # Single consolidated while loop for invocation and validation
         # ------------------------------------------------------------------
-        system_requirements = (
-            "## System-enforced requirements\n"
-            f"- You have **{self.max_iterations} revision cycles**.\n"
-            f"- Write your experiment entrypoint to the bash file:\n"
-            f"  `{self.entry_script_path}`\n"
-            f"- All code must live inside `{self.active_run_path}/experiment`.\n"
-            "- Running the script must create "
-            f"`{self.results_dir}/results_summary.json` "
-            "conforming to the evaluator-directive schema."
-        )
-        
-        initial_input = (
-            f"{self.directive}\n\n"
-            f"{system_requirements}\n\n"
-            f"Read the experiment plan from: {plan_file}\n"
-            f"You have {self.max_iterations} revision cycles.\n"
-            "Implement the experiment, write the entrypoint bash script, "
-            "execute & iterate until the JSON results file is produced.\n"
-            "Finally output your plain-text summary."
-        )
-        
-        # Only pass the input to invoke, no ACTIVE_RUN_PATH
-        agent_input = {
-            "input": initial_input
-        }
+        while current_iteration < self.max_iterations and not validation_passed:
+            self.logger.info(f"Starting iteration {current_iteration + 1}/{self.max_iterations}")
+            
+            # ------------------------------------------------------------------
+            # 1) Prepare structured input for current iteration
+            # ------------------------------------------------------------------
+            if current_iteration == 0:
+                # For initial input, include the full directive and context
+                
+                # Get the file tree
+                read_only_files = [
+                    "/app/sandbox/read_only/dataloader/rstar_data_loader.py",
+                    "/app/sandbox/read_only/evaluator/answer_evaluation.py",
+                    "/app/sandbox/read_only/example/code/baseline.py",
+                    "/app/sandbox/read_only/example/code/evaluation.py",
+                    "/app/sandbox/read_only/example/code/experiment_runner.py", 
+                    "/app/sandbox/read_only/example/code/structured_approach.py",
+                    "/app/sandbox/read_only/models/ollama_client.py",
+                    "/app/sandbox/read_only/api.md",
+                    "/app/sandbox/writable/run_dir/hypothesis/hypotheses.json",
+                    "/app/sandbox/writable/run_dir/planning/experiment_plan.json"
+                ]
+                
+                writable_dirs = [
+                    f"/app/sandbox/writable/{self.active_run_path}/experiment/**",
+                    f"/app/sandbox/writable/{self.active_run_path}/results/**"
+                ]
+                
+                # Read experiment plan
+                experiment_plan = json.loads(plan_file.read_text()) if plan_file.exists() else {}
+                
+                # Read hypotheses
+                hypotheses = json.loads(hypothesis_file.read_text()) if hypothesis_file.exists() else {}
+                
+                # Read API documentation
+                api_docs = api_doc_file.read_text() if api_doc_file.exists() else ""
+                
+                # Get current experiment code (initially empty)
+                experiment_code = self._get_current_experiment_code()
+                
+                # System requirements
+                system_requirements = (
+                    "## System-enforced requirements\n"
+                    f"- You have **{self.max_iterations} revision cycles**.\n"
+                    f"- Write your experiment entrypoint to the bash file:\n"
+                    f"  `{self.entry_script_path}`\n"
+                    f"- All code must live inside `{self.active_run_path}/experiment`.\n"
+                    "- Running the script must create "
+                    f"`{self.results_dir}/results_summary.json` "
+                    "conforming to the evaluator-directive schema."
+                )
+                
+                input_content = (
+                    f"# 1. Directive\n{self.directive}\n\n"
+                    f"{system_requirements}\n\n"
+                    f"# 2. File Tree\n## Read-only files\n{chr(10).join(read_only_files)}\n\n"
+                    f"## Writable directories\n{chr(10).join(writable_dirs)}\n\n"
+                    f"# 3. Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n"
+                    f"# 4. Hypotheses\n```json\n{json.dumps(hypotheses, indent=2)}\n```\n\n"
+                    f"# 5. API Documentation\n{api_docs}\n\n"
+                    f"# 6. Current Experiment Code\n{experiment_code}\n\n"
+                    f"# 7. Code Analysis\nNo code analysis available for initial implementation.\n\n"
+                    f"# 8. Custom Checks\n- Entry script exists: No\n"
+                    f"- Python files in experiment directory: No\n"
+                    f"- results_summary.json exists: No\n\n"
+                    f"Implement the experiment, write the entrypoint bash script, "
+                    f"execute & iterate until the JSON results file is produced.\n"
+                    f"Finally output your plain-text summary."
+                )
+            else:
+                # For subsequent iterations, focus on errors and current state
+                
+                # Get current experiment code
+                experiment_code = self._get_current_experiment_code()
+                
+                # Perform validation checks
+                errors = []
+                
+                # Check 1: Entry script exists and is not empty
+                entry_script_exists = self.entry_script_path.exists() and self.entry_script_path.stat().st_size > 0
+                if not entry_script_exists:
+                    errors.append("No code found in run_experiment.sh or the file doesn't exist")
+                else:
+                    # Try to execute the bash script
+                    try:
+                        bash_output = self.run_bash_tool._run(f"bash {self.entry_script_path}")
+                        self.logger.info(f"Bash script execution output: {bash_output}")
+                    except Exception as e:
+                        self.logger.error(f"Error executing bash script: {e}")
+                        errors.append(f"Error executing bash script: {str(e)}")
+                
+                # Check 2: Python files exist in experiment directory
+                python_files = list(self.exp_dir.glob("*.py"))
+                python_files_exist = len(python_files) > 0
+                if not python_files_exist:
+                    errors.append("No Python files found in the experiment directory")
+                
+                # Check 3: Results file exists
+                results_file_exists = results_json.exists()
+                if not results_file_exists:
+                    errors.append("results_summary.json not found in the results directory")
+                
+                # Format error message
+                if errors:
+                    error_message = "The following errors were found in your experiment:\n- " + "\n- ".join(errors)
+                    
+                    if bash_output:
+                        error_message += f"\n\nOutput from bash script execution:\n{bash_output}"
+                else:
+                    error_message = "All validation checks passed."
+                
+                input_content = (
+                    f"# Iteration {current_iteration + 1} Feedback\n\n"
+                    f"{error_message}\n\n"
+                    f"# Current Experiment Code\n{experiment_code}\n\n"
+                    f"# Custom Checks\n"
+                    f"- Entry script exists: {entry_script_exists}\n"
+                    f"- Python files in experiment directory: {python_files_exist}\n"
+                    f"- results_summary.json exists: {results_file_exists}\n\n"
+                    f"Please correct any issues and continue implementing the experiment."
+                )
+            
+            # Prepare input for agent
+            current_input = {
+                "input": input_content
+            }
+            
+            # ------------------------------------------------------------------
+            # 2) Invoke agent and process result
+            # ------------------------------------------------------------------
+            # Invoke the agent with current input
+            agent_output = self.agent.invoke(current_input)
+            
+            # Update memory with new steps
+            if 'intermediate_steps' in agent_output:
+                new_steps = len(agent_output['intermediate_steps']) - self.steps_in_memory
+                self.total_steps += new_steps
+                self.update_memory_with_steps(agent_output)
+                self.logger.info(f"Added {new_steps} new steps, total steps: {self.total_steps}")
+            
+            # ------------------------------------------------------------------
+            # 3) Validate results
+            # ------------------------------------------------------------------
+            # Check if all validation conditions are met
+            entry_script_exists = self.entry_script_path.exists() and self.entry_script_path.stat().st_size > 0
+            python_files_exist = len(list(self.exp_dir.glob("*.py"))) > 0
+            results_file_exists = results_json.exists()
+            
+            if entry_script_exists and python_files_exist and results_file_exists:
+                self.logger.info("Experiment validation passed, all checks successful")
+                validation_passed = True
+            else:
+                self.logger.info("Validation failed, continuing to next iteration")
+            
+            # Increment iteration counter
+            current_iteration += 1
 
-        agent_output = self.agent.invoke(agent_input)
-        self.logger.info(f"Agent has completed initial attempt")
-        
-        # Track steps from initial output
-        if 'intermediate_steps' in agent_output:
-            self.total_steps += len(agent_output['intermediate_steps'])
-            # Add new steps to memory
-            self.update_memory_with_steps(agent_output)
-        
-        # Validate the output and continue in a loop until validation passes or max iterations reached
-        final_output = self.validate_experiment_output_and_continue(agent_output)
-        
-        # Log final steps
-        self.logger.info(f"Agent total steps: {self.total_steps} across all iterations")
-
         # ------------------------------------------------------------------
-        # 2) Execute the final bash script one more time to get the output
+        # 4) Finalize results
         # ------------------------------------------------------------------
+        # Check if we exited due to max iterations
+        if not validation_passed:
+            self.logger.warning("Maximum iterations reached without successful validation")
+        
+        # Final validation check for the entry script
         if not self.entry_script_path.exists():
             msg = f"Expected entry script not found: {self.entry_script_path}"
             self.logger.error(msg)
             raise FileNotFoundError(msg)
 
-        self.logger.info("Running final generated bash script via RunBashTool")
-        bash_output: str = self.run_bash_tool._run(f"bash {self.entry_script_path}")
+        # Execute the script one final time if validation passed
+        if validation_passed:
+            self.logger.info("Running final generated bash script via RunBashTool")
+            bash_output = self.run_bash_tool._run(f"bash {self.entry_script_path}")
 
-        # ------------------------------------------------------------------
-        # 3) Load results JSON (should exist now after validation)
-        # ------------------------------------------------------------------
+        # Load results JSON (should exist now after validation)
         if not results_json.exists():
             msg = (
                 "Bash script completed but results_summary.json not found at "
@@ -250,10 +381,35 @@ class ExperimentChain:
 
         self.logger.info("=== ExperimentChain finished successfully ===")
         return {
-            "summary": final_output,
+            "summary": agent_output.get("output", ""),
             "bash_output": bash_output,
             "results": results_dict,
         }
+
+    def _get_current_experiment_code(self) -> str:
+        """
+        Gets the current code in the experiment directory with file annotations.
+        
+        Returns:
+            str: A formatted string containing all code files with annotations
+        """
+        if not self.exp_dir.exists():
+            return "No experiment code found."
+        
+        code_files = list(self.exp_dir.glob("*.*"))
+        if not code_files:
+            return "No files found in experiment directory."
+        
+        result = []
+        for file_path in code_files:
+            if file_path.is_file():
+                try:
+                    file_content = file_path.read_text()
+                    result.append(f"## File: {file_path.name}\n```{file_path.suffix[1:]}\n{file_content}\n```\n")
+                except Exception as e:
+                    result.append(f"## File: {file_path.name}\nError reading file: {str(e)}\n")
+        
+        return "\n".join(result)
     
     def update_memory_with_steps(self, agent_output):
         """

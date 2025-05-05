@@ -4,7 +4,7 @@ set -euo pipefail
 # -------------------------------------------------
 # 0.  Read environment variables (with defaults)
 # -------------------------------------------------
-: "${EXPERIMENT_TIMEOUT:=500}"
+: "${EXPERIMENT_TIMEOUT:=600}"
 : "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
 echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
