@@ -26,6 +26,7 @@ from langchain.tools import BaseTool
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.memory import ConversationBufferMemory
 from langchain.memory.chat_message_histories import ChatMessageHistory
+from langchain.schema import SystemMessage
 
 # ----------------------------------------------------------------------
 # Custom tools
@@ -75,6 +76,10 @@ class ExperimentChain:
             return_messages=True,
             input_key="input"  # Explicitly tell memory which key to use
         )
+
+        # Add a counter to track total steps across iterations
+        self.total_steps = 0
+        self.steps_in_memory = 0
 
         # Initialise tool set + agent
         self.tools = self._init_tools()
@@ -200,14 +205,20 @@ class ExperimentChain:
             "input": initial_input
         }
 
-        summary_text = self.agent.invoke(agent_input)
+        agent_output = self.agent.invoke(agent_input)
         self.logger.info(f"Agent has completed initial attempt")
         
-        # Validate the output and continue in a loop until validation passes or max iterations reached
-        summary_text = self.validate_experiment_output_and_continue(summary_text)
+        # Track steps from initial output
+        if 'intermediate_steps' in agent_output:
+            self.total_steps += len(agent_output['intermediate_steps'])
+            # Add new steps to memory
+            self.update_memory_with_steps(agent_output)
         
-        # Log final set of intermediate steps
-        self.logger.info(f"Agent intermediate steps: {len(summary_text.get('intermediate_steps', []))} total steps")
+        # Validate the output and continue in a loop until validation passes or max iterations reached
+        final_output = self.validate_experiment_output_and_continue(agent_output)
+        
+        # Log final steps
+        self.logger.info(f"Agent total steps: {self.total_steps} across all iterations")
 
         # ------------------------------------------------------------------
         # 2) Execute the final bash script one more time to get the output
@@ -239,12 +250,37 @@ class ExperimentChain:
 
         self.logger.info("=== ExperimentChain finished successfully ===")
         return {
-            "summary": summary_text,
+            "summary": final_output,
             "bash_output": bash_output,
             "results": results_dict,
         }
     
-    def validate_experiment_output_and_continue(self, summary_text):
+    def update_memory_with_steps(self, agent_output):
+        """
+        Updates the agent's memory with new intermediate steps.
+        Converts tool actions and observations into SystemMessages.
+        """
+        if 'intermediate_steps' not in agent_output:
+            return
+            
+        # Get all steps
+        steps = agent_output["intermediate_steps"]
+        
+        # Determine which ones are new (not yet in memory)
+        new_steps = steps[self.steps_in_memory:]
+        
+        # Add new steps to memory
+        for action, observation in new_steps:
+            msg = SystemMessage(
+                content=f"Tool '{action.tool}' called with input: {action.tool_input}\n"
+                        f"Tool output: {observation}"
+            )
+            self.memory.chat_memory.add_message(msg)
+        
+        # Update our memory counter
+        self.steps_in_memory = len(steps)
+    
+    def validate_experiment_output_and_continue(self, agent_output):
         """
         Validates the experiment output and provides feedback to continue if errors are found.
         Runs in a loop until validation passes or max_iterations is reached.
@@ -263,9 +299,9 @@ class ExperimentChain:
         
         # Loop until validation passes or max iterations reached
         while True:
-            # Extract intermediate steps to check iteration count
-            intermediate_steps = summary_text.get('intermediate_steps', [])
-            current_iterations = len(intermediate_steps) // 2  # Since each think+act counts as 2 steps
+            # Determine current iteration count based on total steps
+            # Each think+act pair counts as 2 steps
+            current_iterations = self.total_steps // 2
             
             logger.info(f"Validating experiment output - current iterations: {current_iterations}/{self.max_iterations}")
             
@@ -319,14 +355,20 @@ class ExperimentChain:
             logger.info(f"Errors found, continuing with feedback using Langchain memory")
             
             # Continue execution with the error feedback
-            updated_summary_text = self.agent.invoke(continue_input)
+            updated_output = self.agent.invoke(continue_input)
             
-            # Merge the previous intermediate steps with new ones
-            if 'intermediate_steps' in updated_summary_text and 'intermediate_steps' in summary_text:
-                summary_text['intermediate_steps'].extend(updated_summary_text['intermediate_steps'])
-                updated_summary_text['intermediate_steps'] = summary_text['intermediate_steps']
+            # Update total steps count with new steps
+            if 'intermediate_steps' in updated_output:
+                # Calculate how many new steps were added
+                new_steps = len(updated_output['intermediate_steps'])
+                self.total_steps += new_steps
+                
+                # Update memory with new steps
+                self.update_memory_with_steps(updated_output)
+                
+                logger.info(f"Added {new_steps} new steps, total steps: {self.total_steps}")
             
-            # Update the summary_text for the next iteration
-            summary_text = updated_summary_text
+            # Update the agent_output for the next iteration
+            agent_output = updated_output
         
-        return summary_text
+        return agent_output
