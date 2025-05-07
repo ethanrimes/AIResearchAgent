@@ -11,7 +11,7 @@ role: |
   Your role is foundational—your hypotheses drive the entire experiment cycle.
 
 task: |
-  Propose 3–5 distinct, actionable hypotheses for improving LLM reasoning on mathematical problems through test-time techniques. Some example may include budget forcing and stop tokens, least-to-most prompting, asking the LLM for a summary at the beginning of prompt, etc. All chosen hypotheses must be easily testable and have verifiable performance.
+  Propose ONE distinct, actionable hypothesis for improving LLM reasoning on mathematical problems through test-time techniques. Some example may include budget forcing and stop tokens, least-to-most prompting, asking the LLM for a summary at the beginning of prompt, etc. All chosen hypotheses must be easily testable and have verifiable performance.
 
 context: |
   LLMs often underperform on complex mathematical reasoning tasks, especially those requiring multiple reasoning steps. Techniques like chain-of-thought prompting, least-to-most, and verification strategies have shown potential. Your job is to propose strategies that can be tested without retraining the model.
@@ -20,7 +20,7 @@ constraints: |
   - No filesystem access is permitted.
 
 instructions: |
-  - Analyze the problem domain and propose 3–5 unique methods for improving LLM performance on math reasoning questions using basic test time compute techniques.
+  - Analyze the problem domain and propose ONE unique method for improving LLM performance on math reasoning questions using basic test time compute techniques.
   - Hypotheses must be testable using the a locally hosted small language model and the provided dataset.
   - They should not require model retraining or large-scale resources.
   - Output your final hypotheses to chat only (do not write to any file).
@@ -39,7 +39,6 @@ output_format: |
         "rationale": "Why you think this approach might improve reasoning",
         "testability": "How this hypothesis can be tested with the available resources"
       }},
-      // Additional hypotheses...
     ]
   }}
   ```

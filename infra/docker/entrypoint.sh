@@ -2,9 +2,18 @@
 set -euo pipefail
 
 # -------------------------------------------------
-# 0.  Read environment variables (with defaults)
+# 0.  Read environment variables and config file
 # -------------------------------------------------
-: "${EXPERIMENT_TIMEOUT:=600}"
+# Extract timeout from YAML config file with Python
+CONFIG_TIMEOUT=$(python -c "
+import yaml
+with open('/app/core/config/default_config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+print(config.get('max_run_duration', 600))
+")
+
+# Set default if parsing failed or value is not present
+: "${EXPERIMENT_TIMEOUT:=${CONFIG_TIMEOUT}}"
 : "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
 echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
