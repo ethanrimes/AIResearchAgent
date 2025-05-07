@@ -15,7 +15,8 @@ from langchain.prompts import PromptTemplate
 
 from core.agent.schemas.output_schemas import CritiqueOutput
 from core.utils.path_utils import get_active_run_path
-from core.utils.experiment_utils import get_current_experiment_code
+from core.utils.experiment_utils import get_current_experiment_code, run_pyright_type_check
+
 
 class CritiqueChain:
     """
