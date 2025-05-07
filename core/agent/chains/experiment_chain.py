@@ -20,6 +20,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Any
+from core.utils.experiment_utils import run_pyright_type_check
 
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import BaseTool
@@ -300,10 +301,23 @@ class ExperimentChain:
                 else:
                     error_section = "All validation checks passed."
                 
+                # Add type checking
+                type_check_results = run_pyright_type_check(self.exp_dir)
+                self.logger.info(f"Type checking results: {type_check_results}")
+
+                # Add this to the input_content for iteration > 0
+                type_check_section = ""
+                if type_check_results["has_errors"]:
+                    type_check_section = f"# Type Check Results\nFound {type_check_results['error_count']} type errors:\n- " + "\n- ".join(type_check_results["errors"]) + "\n\n"
+                else:
+                    type_check_section = "# Type Check Results\nNo type errors found.\n\n"
+
+                # Then include type_check_section in the input_content for iterations > 0
                 input_content = (
                     f"# Iteration {current_iteration + 1} Feedback\n\n"
                     f"{error_section}\n\n"
                     f"# Current Experiment Code\n{experiment_code}\n\n"
+                    f"{type_check_section}"  # Add the type check section
                     f"{critique_section}"
                     f"# Custom Checks\n"
                     f"- Entry script exists: {validation_results['entry_script_exists']}\n"

@@ -130,3 +130,77 @@ def update_memory_with_steps(memory, steps_in_memory, agent_output):
     logger.info(f"Added {len(new_steps)} new steps to memory. Total steps: {updated_steps_count}")
     
     return updated_steps_count
+
+
+def run_pyright_type_check(experiment_dir: Path) -> Dict[str, Any]:
+    """
+    Runs pyright type checking on the Python files in the experiment directory.
+    
+    Args:
+        experiment_dir: Path to the experiment directory.
+        
+    Returns:
+        Dict containing type check results including errors if any.
+    """
+    import subprocess
+    import json
+    from pathlib import Path
+    
+    logger = logging.getLogger("ai_research_agent.experiment_utils")
+    
+    result = {
+        "has_errors": False,
+        "error_count": 0,
+        "errors": []
+    }
+    
+    # Check if pyright is installed
+    try:
+        # Look for Python files
+        python_files = list(experiment_dir.glob("**/*.py"))
+        if not python_files:
+            logger.info("No Python files found for type checking")
+            return result
+            
+        # Run pyright on each file
+        for py_file in python_files:
+            try:
+                # Use strict mode for better type checking
+                cmd = ["pyright", "--outputjson", str(py_file)]
+                process = subprocess.run(cmd, capture_output=True, text=True)
+                
+                # Parse output
+                if process.returncode != 0:
+                    # Got errors
+                    try:
+                        output = json.loads(process.stdout)
+                        for diagnostic in output.get("diagnostics", []):
+                            if diagnostic.get("severity", "") in ["error", "warning"]:
+                                error_message = f"{py_file.name}:{diagnostic.get('line', '?')}: {diagnostic.get('message', 'Unknown error')}"
+                                result["errors"].append(error_message)
+                                result["error_count"] += 1
+                                result["has_errors"] = True
+                    except json.JSONDecodeError:
+                        # Fallback for when JSON parsing fails
+                        error_lines = process.stderr.strip().split("\n")
+                        for line in error_lines:
+                            if line.strip():
+                                result["errors"].append(line.strip())
+                                result["error_count"] += 1
+                                result["has_errors"] = True
+            except Exception as e:
+                logger.error(f"Error running pyright on {py_file}: {str(e)}")
+                result["errors"].append(f"Failed to check {py_file.name}: {str(e)}")
+                result["error_count"] += 1
+                result["has_errors"] = True
+    
+    except FileNotFoundError:
+        logger.warning("Pyright not found, skipping type checking")
+        result["errors"].append("Pyright not installed - skipping type check")
+    except Exception as e:
+        logger.error(f"Error during type checking: {str(e)}")
+        result["errors"].append(f"Type checking error: {str(e)}")
+        result["error_count"] += 1
+        result["has_errors"] = True
+    
+    return result

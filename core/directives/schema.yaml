@@ -1,39 +1,27 @@
 type: map
 required: true
 mapping:
-  name:
-    type: str
-    required: true
-    description: "Short title of the directive or phase."
-  description:
-    type: str
-    required: true
-    description: "Narrative instruction describing the agent's purpose."
   role:
     type: str
     required: true
-    description: "Defines the role or persona of the agent (e.g. researcher, evaluator)."
-  objectives:
-    type: seq
+    description: "Defines the role or persona of the agent, including their position in the workflow."
+  task:
+    type: str
     required: true
-    sequence:
-      - type: str
-    description: "List of specific goals the agent must accomplish."
-  inputs:
-    type: seq
-    required: false
-    sequence:
-      - type: str
-    description: "Optional list of input references such as model or dataset identifiers."
+    description: "Concise description of what the agent needs to accomplish."
+  context:
+    type: str
+    required: true
+    description: "Background information and context for the task."
   constraints:
-    type: seq
-    required: false
-    sequence:
-      - type: str
-    description: "Optional list of constraints or boundaries on agent behavior."
-  success_criteria:
-    type: seq
-    required: false
-    sequence:
-      - type: str
-    description: "Optional list of criteria for judging a successful output."
+    type: str
+    required: true
+    description: "Limitations and boundaries for the agent's actions."
+  instructions:
+    type: str
+    required: true
+    description: "Detailed step-by-step guidance for completing the task."
+  output_format:
+    type: str
+    required: true
+    description: "Specification of how the agent should structure their output, often as JSON."
