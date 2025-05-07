@@ -45,35 +45,36 @@ output_format: |
   Your final output should be a structured JSON file with the following format:
   
   ```json
-  {
-    "implementation_plan": {
-      "file_tree": {
+  {{
+    "implementation_plan": {{
+      "file_tree": {{
         "description": "Overview of the file structure",
         "files": [
-          {"path": "path/to/file1.py", "purpose": "Brief description"},
-          {"path": "path/to/file2.py", "purpose": "Brief description"},
+          {{"path": "path/to/file1.py", "purpose": "Brief description"}},
+          {{"path": "path/to/file2.py", "purpose": "Brief description"}},
           ...
         ]
-      },
+      }},
       "code_skeletons": [
-        {
+        {{
           "file_path": "path/to/file1.py",
           "skeleton": "# Imports\nimport ...\n\n# Code skeleton with TODOs\ndef function():\n    # TODO: Implement functionality\n    pass"
-        },
+        }},
         ...
       ],
       "build_sequence": [
-        {"step": 1, "description": "First implement X because...", "files": ["path/to/file1.py"]},
-        {"step": 2, "description": "Then implement Y because...", "files": ["path/to/file2.py"]},
+        {{"step": 1, "description": "First implement X because...", "files": ["path/to/file1.py"]}},
+        {{"step": 2, "description": "Then implement Y because...", "files": ["path/to/file2.py"]}},
         ...
       ],
-      "implementation_locations": {
-        "baseline": {"file": "path/to/baseline.py", "description": "How baseline is implemented"},
-        "entry_point": {"description": "What run_experiment.sh does and how it works"},
+      "implementation_locations": {{
+        "baseline": {{"file": "path/to/baseline.py", "description": "How baseline is implemented"}},
+        "entry_point": {{"description": "What run_experiment.sh does and how it works"}},
         "hypotheses": [
-          {"id": "H1", "files": ["path/to/file1.py"], "description": "How this hypothesis is implemented"},
+          {{"id": "H1", "files": ["path/to/file1.py"], "description": "How this hypothesis is implemented"}},
           ...
         ]
-      }
-    }
-  }
+      }}
+    }}
+  }}
+  ```

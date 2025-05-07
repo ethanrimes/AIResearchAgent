@@ -23,41 +23,42 @@ output_format: |
   Your final output should be a JSON object with the following structure:
   
   ```json
-  {
-    "requirements_met": {
-      "hypotheses_implementation": {
+  {{
+    "requirements_met": {{
+      "hypotheses_implementation": {{
         "is_complete": true|false,
         "missing_elements": []
-      },
+      }},
       "correct_entrypoint": true|false,
       "baseline_calculation": true|false,
       "metrics_calculation": true|false,
       "dataloader_api_usage": true|false,
       "ollama_client_api_usage": true|false,
       "extractor_evaluator_api_usage": true|false
-    },
-    "file_status": {
+    }},
+    "file_status": {{
       "files": [
-        {
+        {{
           "path": "path/to/file.py",
           "status": "unfinished|finished|error",
           "issues": ["Issue description if any"]
-        }
+        }}
       ],
-      "summary": {
+      "summary": {{
         "total_files": 0,
         "finished_files": 0,
         "unfinished_files": 0,
         "error_files": 0,
         "completion_percentage": 0.0
-      }
-    },
-    "type_check_results": {
+      }}
+    }},
+    "type_check_results": {{
       "has_errors": true|false,
       "error_count": 0,
       "errors": []
-    },
+    }},
     "suggestions": [
       "Brief suggestion for improvement if any requirement is not met"
     ]
-  }
+  }}
+  ```

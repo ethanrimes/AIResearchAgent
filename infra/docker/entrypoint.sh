@@ -5,6 +5,7 @@ set -euo pipefail
 # 0.  Read environment variables and config file
 # -------------------------------------------------
 # Extract timeout from YAML config file with Python
+# Modify this part of entrypoint.sh
 CONFIG_TIMEOUT=$(python -c "
 import yaml
 with open('/app/core/config/default_config.yaml', 'r') as f:
@@ -12,8 +13,14 @@ with open('/app/core/config/default_config.yaml', 'r') as f:
 print(config.get('max_run_duration', 600))
 ")
 
-# Set default if parsing failed or value is not present
-: "${EXPERIMENT_TIMEOUT:=${CONFIG_TIMEOUT}}"
+# CHANGE THIS LINE: Make config value the primary source and env var the fallback
+EXPERIMENT_TIMEOUT="${CONFIG_TIMEOUT:-${EXPERIMENT_TIMEOUT:-600}}"
+echo "Using timeout from config file: ${EXPERIMENT_TIMEOUT}s"
+
+echo "CONFIG_TIMEOUT from YAML: ${CONFIG_TIMEOUT}"
+echo "EXPERIMENT_TIMEOUT environment variable: ${EXPERIMENT_TIMEOUT}"
+echo "Final EXPERIMENT_TIMEOUT being used: ${EXPERIMENT_TIMEOUT}"
+
 : "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
 echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
@@ -22,6 +29,8 @@ echo "$EXPERIMENT_RUN_PATH" > /app/active_run_path/path.txt
 echo "Starting AI Research Agent with experiment timeout: ${EXPERIMENT_TIMEOUT}s"
 echo "Using OpenAI API for agent"
 echo "Using Ollama for local inference via host.docker.internal"
+
+
 
 # -------------------------------------------------
 # 1.  Filesystem-permission checks
