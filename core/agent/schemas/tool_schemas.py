@@ -54,7 +54,6 @@ class WriteScratchpadInput(BaseModel):
         description="append (default) or overwrite the existing scratch-pad",
     )
 
-
 class WriteScratchpadOutput(BaseModel):
     message: str
 

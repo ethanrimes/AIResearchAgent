@@ -15,7 +15,6 @@ from typing import Dict, Any, List
 import openai          # <-- add
 
 from core.utils.path_utils import get_active_run_timestamp
-# from langchain_core.callbacks.streaming_stdout import StdOutCallbackHandler
 
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
@@ -26,6 +25,7 @@ from core.agent.chains.hypothesis_chain import HypothesisChain
 from core.agent.chains.planner_chain import PlannerChain
 from core.agent.chains.experiment_chain import ExperimentChain
 from core.agent.chains.evaluator_chain import EvaluatorChain
+from core.agent.chains.critique_chain import CritiqueChain  # Add import for CritiqueChain
 
 # Import utility functions
 from core.utils.directive_utils import load_directive
@@ -130,12 +130,8 @@ class Agent:
         openai.base_url = "https://api.openai.com/v1"
         self.logger.info(f"Using OpenAI base URL: {openai.base_url}")
 
-        # handler = StdOutCallbackHandler()
-
         return ChatOpenAI(
             model=self.config["agent_model"],
-            # callbacks=[handler],
-            # verbose=True
             # temperature=0.0,  # Use deterministic outputs for research
         )
         
@@ -148,6 +144,8 @@ class Agent:
         """
         directives_base_path = self.config["directives_path"]
         
+        # Initialize chains in a specific order to ensure dependencies are available
+        # First, initialize chains that don't depend on others
         chains = {
             "hypothesis": HypothesisChain(
                 llm=self.llm,
@@ -159,18 +157,26 @@ class Agent:
                 workspace=self.workspace,
                 directive=load_directive(f"{directives_base_path}/planner_chain.yaml")
             ),
-            "experiment": ExperimentChain(
-                llm=self.llm,
-                workspace=self.workspace,
-                directive=load_directive(f"{directives_base_path}/experiment_chain.yaml"),
-                max_iterations=self.config["max_coding_iters"]
-            ),
             "evaluator": EvaluatorChain(
                 llm=self.llm,
                 workspace=self.workspace,
                 directive=load_directive(f"{directives_base_path}/evaluator_chain.yaml")
+            ),
+            "critique": CritiqueChain(  # Initialize critique chain before experiment chain
+                llm=self.llm,
+                workspace=self.workspace,
+                directive=load_directive(f"{directives_base_path}/critique_chain.yaml")
             )
         }
+        
+        # Now initialize experiment chain with critique chain dependency
+        chains["experiment"] = ExperimentChain(
+            llm=self.llm,
+            workspace=self.workspace,
+            directive=load_directive(f"{directives_base_path}/experiment_chain.yaml"),
+            max_iterations=self.config["max_coding_iters"],
+            critique_chain=chains["critique"]  # Pass the critique chain
+        )
         
         self.logger.info("Agent chains initialized")
         return chains

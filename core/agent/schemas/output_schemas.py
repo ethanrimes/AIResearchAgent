@@ -85,3 +85,25 @@ class Findings(BaseModel):
 
 class EvaluatorOutput(BaseModel):
     findings: Findings
+
+
+# ---------------------------------------------------------------------------
+# CritiqueChain
+# ---------------------------------------------------------------------------
+
+class HypothesesImplementation(BaseModel):
+    is_complete: bool = Field(..., description="Whether all hypotheses are fully implemented")
+    missing_elements: List[str] = Field(default_factory=list, description="List of missing hypothesis elements if any")
+
+class RequirementsMet(BaseModel):
+    hypotheses_implementation: HypothesesImplementation
+    correct_entrypoint: bool = Field(..., description="Whether run_experiment.sh is the correct entrypoint")
+    baseline_calculation: bool = Field(..., description="Whether a baseline is correctly calculated")
+    metrics_calculation: bool = Field(..., description="Whether metrics are calculated as specified")
+    dataloader_api_usage: bool = Field(..., description="Whether the dataloader API is used correctly")
+    ollama_client_api_usage: bool = Field(..., description="Whether the ollama LLM client API is used correctly")
+    extractor_evaluator_api_usage: bool = Field(..., description="Whether the answer extractor and evaluator API is used correctly")
+
+class CritiqueOutput(BaseModel):
+    requirements_met: RequirementsMet
+    suggestions: List[str] = Field(default_factory=list, description="Improvement suggestions for unmet requirements")

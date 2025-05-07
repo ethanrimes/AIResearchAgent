@@ -36,6 +36,7 @@ from core.agent.tools.write_file import WriteFileTool
 from core.agent.tools.run_bash import RunBashTool
 from core.agent.tools.run_code import RunCodeTool
 from core.utils.path_utils import get_active_run_path
+from core.utils.experiment_utils import get_current_experiment_code, validate_experiment_output, update_memory_with_steps
 
 # ----------------------------------------------------------------------
 class ExperimentChain:
@@ -52,12 +53,14 @@ class ExperimentChain:
         workspace: Dict[str, Path],
         directive: str,
         max_iterations: int = 10,
+        critique_chain = None,
     ):
         self.llm = llm
         self.workspace = workspace
         self.directive = directive
         self.max_iterations = max_iterations
         self.active_run_path = str(workspace["writable"])
+        self.critique_chain = critique_chain  # Store the critique chain
 
         # Short-hand directories
         self.exp_dir = workspace["experiment"]
@@ -86,7 +89,9 @@ class ExperimentChain:
         self.agent = self._init_agent()
 
         self.logger.info(
-            "ExperimentChain initialised (max_iterations=%s)", self.max_iterations
+            "ExperimentChain initialised (max_iterations=%s, critique_chain=%s)", 
+            self.max_iterations, 
+            "available" if self.critique_chain else "not available"
         )
 
     # ------------------------------------------------------------------
@@ -128,7 +133,7 @@ class ExperimentChain:
         # Create a system message that includes the ACTIVE_RUN_PATH
         system_message = (
             f"You are an AI research assistant implementing experiments based on a plan. "
-            f"The ACTIVE_RUN_PATH for this session is: {self.active_run_path}"
+            # f"The ACTIVE_RUN_PATH for this session is: {self.active_run_path}"
         )
         
         # Updated prompt template with system message containing ACTIVE_RUN_PATH
@@ -182,6 +187,7 @@ class ExperimentChain:
         validation_passed = False
         agent_output = None
         bash_output = ""
+        critique_results = None
         
         # Initialize current iteration counter
         current_iteration = 0
@@ -214,7 +220,7 @@ class ExperimentChain:
                 
                 writable_dirs = [
                     f"/app/sandbox/writable/{self.active_run_path}/experiment/**",
-                    f"/app/sandbox/writable/{self.active_run_path}/results/**"
+                    # f"/app/sandbox/writable/{self.active_run_path}/results/**"
                 ]
                 
                 # Read experiment plan
@@ -227,23 +233,16 @@ class ExperimentChain:
                 api_docs = api_doc_file.read_text() if api_doc_file.exists() else ""
                 
                 # Get current experiment code (initially empty)
-                experiment_code = self._get_current_experiment_code()
-                
-                # System requirements
-                system_requirements = (
-                    "## System-enforced requirements\n"
-                    f"- You have **{self.max_iterations} revision cycles**.\n"
-                    f"- Write your experiment entrypoint to the bash file:\n"
-                    f"  `{self.entry_script_path}`\n"
-                    f"- All code must live inside `{self.active_run_path}/experiment`.\n"
-                    "- Running the script must create "
-                    f"`{self.results_dir}/results_summary.json` "
-                    "conforming to the evaluator-directive schema."
-                )
+                experiment_code = get_current_experiment_code(self.exp_dir)
                 
                 input_content = (
                     f"# 1. Directive\n{self.directive}\n\n"
-                    f"{system_requirements}\n\n"
+                    f"- Write your experiment entrypoint to the bash file:\n"
+                    f"  `{self.entry_script_path}`\n"
+                    "- Running the script must create "
+                    f"`{self.results_dir}/results_summary.json`. "
+                    f"`{self.results_dir} cannot be directly written to through the write tool. It is for code output only."
+                    "conforming to the evaluator-directive schema."
                     f"# 2. File Tree\n## Read-only files\n{chr(10).join(read_only_files)}\n\n"
                     f"## Writable directories\n{chr(10).join(writable_dirs)}\n\n"
                     f"# 3. Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n"
@@ -262,52 +261,54 @@ class ExperimentChain:
                 # For subsequent iterations, focus on errors and current state
                 
                 # Get current experiment code
-                experiment_code = self._get_current_experiment_code()
+                experiment_code = get_current_experiment_code(self.exp_dir)
                 
                 # Perform validation checks
-                errors = []
+                validation_results = validate_experiment_output(self.exp_dir, self.results_dir, self.ENTRY_SCRIPT)
                 
-                # Check 1: Entry script exists and is not empty
-                entry_script_exists = self.entry_script_path.exists() and self.entry_script_path.stat().st_size > 0
-                if not entry_script_exists:
-                    errors.append("No code found in run_experiment.sh or the file doesn't exist")
-                else:
-                    # Try to execute the bash script
+                # Try to execute the bash script if it exists
+                if validation_results["entry_script_exists"]:
                     try:
                         bash_output = self.run_bash_tool._run(f"bash {self.entry_script_path}")
                         self.logger.info(f"Bash script execution output: {bash_output}")
                     except Exception as e:
                         self.logger.error(f"Error executing bash script: {e}")
-                        errors.append(f"Error executing bash script: {str(e)}")
+                        validation_results["errors"].append(f"Error executing bash script: {str(e)}")
                 
-                # Check 2: Python files exist in experiment directory
-                python_files = list(self.exp_dir.glob("*.py"))
-                python_files_exist = len(python_files) > 0
-                if not python_files_exist:
-                    errors.append("No Python files found in the experiment directory")
+                # Run the critique chain to evaluate the current implementation
+                if hasattr(self, "critique_chain") and self.critique_chain:
+                    try:
+                        self.logger.info("Running critique chain for code review")
+                        critique_results = self.critique_chain.run()
+                        self.logger.info("Critique chain completed successfully")
+                    except Exception as e:
+                        self.logger.error(f"Error running critique chain: {e}")
+                        critique_results = {"error": f"Failed to run critique: {str(e)}"}
                 
-                # Check 3: Results file exists
-                results_file_exists = results_json.exists()
-                if not results_file_exists:
-                    errors.append("results_summary.json not found in the results directory")
+                # Format critique results for inclusion in prompt
+                critique_section = ""
+                if critique_results:
+                    critique_section = f"# 7. Code Review Results\n```json\n{json.dumps(critique_results, indent=2)}\n```\n\n"
                 
                 # Format error message
-                if errors:
-                    error_message = "The following errors were found in your experiment:\n- " + "\n- ".join(errors)
+                error_section = ""
+                if validation_results["errors"]:
+                    error_section = "The following errors were found in your experiment:\n- " + "\n- ".join(validation_results["errors"])
                     
                     if bash_output:
-                        error_message += f"\n\nOutput from bash script execution:\n{bash_output}"
+                        error_section += f"\n\nOutput from bash script execution:\n{bash_output}"
                 else:
-                    error_message = "All validation checks passed."
+                    error_section = "All validation checks passed."
                 
                 input_content = (
                     f"# Iteration {current_iteration + 1} Feedback\n\n"
-                    f"{error_message}\n\n"
+                    f"{error_section}\n\n"
                     f"# Current Experiment Code\n{experiment_code}\n\n"
+                    f"{critique_section}"
                     f"# Custom Checks\n"
-                    f"- Entry script exists: {entry_script_exists}\n"
-                    f"- Python files in experiment directory: {python_files_exist}\n"
-                    f"- results_summary.json exists: {results_file_exists}\n\n"
+                    f"- Entry script exists: {validation_results['entry_script_exists']}\n"
+                    f"- Python files in experiment directory: {validation_results['python_files_exist']}\n"
+                    f"- results_summary.json exists: {validation_results['results_file_exists']}\n\n"
                     f"Please correct any issues and continue implementing the experiment."
                 )
             
@@ -324,20 +325,35 @@ class ExperimentChain:
             
             # Update memory with new steps
             if 'intermediate_steps' in agent_output:
-                new_steps = len(agent_output['intermediate_steps']) - self.steps_in_memory
-                self.total_steps += new_steps
-                self.update_memory_with_steps(agent_output)
-                self.logger.info(f"Added {new_steps} new steps, total steps: {self.total_steps}")
+                self.steps_in_memory = update_memory_with_steps(
+                    self.memory, self.steps_in_memory, agent_output
+                )
             
             # ------------------------------------------------------------------
-            # 3) Validate results
+            # 3) Run the critique chain after each iteration if available
+            # ------------------------------------------------------------------
+            if self.critique_chain:
+                try:
+                    self.logger.info("Running critique chain for code review")
+                    critique_results = self.critique_chain.run()
+                    self.logger.info("Critique chain executed successfully")
+                except Exception as e:
+                    self.logger.error(f"Error running critique chain: {e}")
+                    critique_results = {"error": f"Failed to run critique: {str(e)}"}
+            else:
+                self.logger.info("No critique chain available, skipping code review")
+            
+            # ------------------------------------------------------------------
+            # 4) Validate results
             # ------------------------------------------------------------------
             # Check if all validation conditions are met
-            entry_script_exists = self.entry_script_path.exists() and self.entry_script_path.stat().st_size > 0
-            python_files_exist = len(list(self.exp_dir.glob("*.py"))) > 0
-            results_file_exists = results_json.exists()
+            validation_results = validate_experiment_output(self.exp_dir, self.results_dir, self.ENTRY_SCRIPT)
             
-            if entry_script_exists and python_files_exist and results_file_exists:
+            if all([
+                validation_results["entry_script_exists"],
+                validation_results["python_files_exist"],
+                validation_results["results_file_exists"]
+            ]):
                 self.logger.info("Experiment validation passed, all checks successful")
                 validation_passed = True
             else:
@@ -347,7 +363,7 @@ class ExperimentChain:
             current_iteration += 1
 
         # ------------------------------------------------------------------
-        # 4) Finalize results
+        # 5) Finalize results
         # ------------------------------------------------------------------
         # Check if we exited due to max iterations
         if not validation_passed:
@@ -380,151 +396,15 @@ class ExperimentChain:
             raise
 
         self.logger.info("=== ExperimentChain finished successfully ===")
-        return {
+        
+        # Include critique results in the final output
+        final_output = {
             "summary": agent_output.get("output", ""),
             "bash_output": bash_output,
             "results": results_dict,
         }
-
-    def _get_current_experiment_code(self) -> str:
-        """
-        Gets the current code in the experiment directory with file annotations.
         
-        Returns:
-            str: A formatted string containing all code files with annotations
-        """
-        if not self.exp_dir.exists():
-            return "No experiment code found."
-        
-        code_files = list(self.exp_dir.glob("*.*"))
-        if not code_files:
-            return "No files found in experiment directory."
-        
-        result = []
-        for file_path in code_files:
-            if file_path.is_file():
-                try:
-                    file_content = file_path.read_text()
-                    result.append(f"## File: {file_path.name}\n```{file_path.suffix[1:]}\n{file_content}\n```\n")
-                except Exception as e:
-                    result.append(f"## File: {file_path.name}\nError reading file: {str(e)}\n")
-        
-        return "\n".join(result)
-    
-    def update_memory_with_steps(self, agent_output):
-        """
-        Updates the agent's memory with new intermediate steps.
-        Converts tool actions and observations into SystemMessages.
-        """
-        if 'intermediate_steps' not in agent_output:
-            return
+        if critique_results:
+            final_output["critique"] = critique_results
             
-        # Get all steps
-        steps = agent_output["intermediate_steps"]
-        
-        # Determine which ones are new (not yet in memory)
-        new_steps = steps[self.steps_in_memory:]
-        
-        # Add new steps to memory
-        for action, observation in new_steps:
-            msg = SystemMessage(
-                content=f"Tool '{action.tool}' called with input: {action.tool_input}\n"
-                        f"Tool output: {observation}"
-            )
-            self.memory.chat_memory.add_message(msg)
-        
-        # Update our memory counter
-        self.steps_in_memory = len(steps)
-    
-    def validate_experiment_output_and_continue(self, agent_output):
-        """
-        Validates the experiment output and provides feedback to continue if errors are found.
-        Runs in a loop until validation passes or max_iterations is reached.
-        Uses Langchain memory to maintain conversation history.
-        """
-        import os
-        from pathlib import Path
-        
-        # Define logger
-        logger = logging.getLogger("ai_research_agent.experiment_chain")
-        
-        # Set up results json path
-        results_json_path = self.results_dir / "results_summary.json"
-        
-        bash_output = ""
-        
-        # Loop until validation passes or max iterations reached
-        while True:
-            # Determine current iteration count based on total steps
-            # Each think+act pair counts as 2 steps
-            current_iterations = self.total_steps // 2
-            
-            logger.info(f"Validating experiment output - current iterations: {current_iterations}/{self.max_iterations}")
-            
-            # Check if we've already reached max iterations
-            if current_iterations >= self.max_iterations:
-                logger.warning("Maximum iterations reached, stopping validation loop")
-                break
-            
-            # Check for the error conditions and collect them
-            errors = []
-            
-            # 1. First try to execute the bash script if it exists
-            entry_script_path = self.exp_dir / self.ENTRY_SCRIPT
-            if entry_script_path.exists() and os.path.getsize(entry_script_path) > 0:
-                logger.info("Bash script exists, attempting execution...")
-                try:
-                    bash_output = self.run_bash_tool._run(f"bash {entry_script_path}")
-                    logger.info(f"Bash script execution output: {bash_output}")
-                except Exception as e:
-                    logger.error(f"Error executing bash script: {e}")
-                    errors.append(f"Error executing bash script: {str(e)}")
-            else:
-                errors.append("No code found in run_experiment.sh or the file doesn't exist")
-            
-            # 2. Check if there are other Python files in the experiment directory
-            python_files = list(self.exp_dir.glob("*.py"))
-            if not python_files:
-                errors.append("No Python files found in the experiment directory")
-            
-            # 3. Check if results_summary.json exists (this would be created by the bash script)
-            if not results_json_path.exists():
-                errors.append("results_summary.json not found in the results directory")
-            
-            # If all checks pass, break out of the loop
-            if not errors:
-                logger.info("Experiment validation passed, all checks successful")
-                break
-            
-            # If errors found, provide feedback and continue
-            error_message = "The following errors were found in your experiment:\n- " + "\n- ".join(errors)
-            error_message += "\n\nPlease correct these issues and continue implementing the experiment."
-            
-            if bash_output:
-                error_message += f"\n\nOutput from bash script execution:\n{bash_output}"
-            
-            # Only pass the input to invoke, no ACTIVE_RUN_PATH
-            continue_input = {
-                "input": error_message
-            }
-            
-            logger.info(f"Errors found, continuing with feedback using Langchain memory")
-            
-            # Continue execution with the error feedback
-            updated_output = self.agent.invoke(continue_input)
-            
-            # Update total steps count with new steps
-            if 'intermediate_steps' in updated_output:
-                # Calculate how many new steps were added
-                new_steps = len(updated_output['intermediate_steps'])
-                self.total_steps += new_steps
-                
-                # Update memory with new steps
-                self.update_memory_with_steps(updated_output)
-                
-                logger.info(f"Added {new_steps} new steps, total steps: {self.total_steps}")
-            
-            # Update the agent_output for the next iteration
-            agent_output = updated_output
-        
-        return agent_output
+        return final_output
