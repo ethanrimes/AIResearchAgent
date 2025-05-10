@@ -78,7 +78,8 @@ class ExperimentChain:
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True,
-            input_key="input"  # Explicitly tell memory which key to use
+            input_key="input",  # Explicitly tell memory which key to use
+            output_key="output"
         )
 
         # Add a counter to track total steps across iterations

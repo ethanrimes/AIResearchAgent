@@ -1,0 +1,9 @@
+{
+    "include": ["**/*.py"],
+    "exclude": ["**/node_modules", "**/__pycache__"],
+    "venvPath": ".",
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "pythonVersion": "3.11",
+    "typeCheckingMode": "basic"
+  }

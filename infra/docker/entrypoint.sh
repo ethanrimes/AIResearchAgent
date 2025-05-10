@@ -4,22 +4,33 @@ set -euo pipefail
 # -------------------------------------------------
 # 0.  Read environment variables and config file
 # -------------------------------------------------
-# Extract timeout from YAML config file with Python
-# Modify this part of entrypoint.sh
-CONFIG_TIMEOUT=$(python -c "
+# Extract timeout and reasoner_model from YAML config file with Python
+CONFIG_VALUES=$(python -c "
 import yaml
 with open('/app/core/config/default_config.yaml', 'r') as f:
     config = yaml.safe_load(f)
-print(config.get('max_run_duration', 600))
+timeout = config.get('max_run_duration', 600)
+reasoner_model = config.get('reasoner_model', '')
+print(f'{timeout} {reasoner_model}')
 ")
 
-# CHANGE THIS LINE: Make config value the primary source and env var the fallback
-EXPERIMENT_TIMEOUT="${CONFIG_TIMEOUT:-${EXPERIMENT_TIMEOUT:-600}}"
-echo "Using timeout from config file: ${EXPERIMENT_TIMEOUT}s"
-
+# Parse the output
+read -r CONFIG_TIMEOUT CONFIG_REASONER_MODEL <<< "$CONFIG_VALUES"
 echo "CONFIG_TIMEOUT from YAML: ${CONFIG_TIMEOUT}"
-echo "EXPERIMENT_TIMEOUT environment variable: ${EXPERIMENT_TIMEOUT}"
+echo "CONFIG_REASONER_MODEL from YAML: ${CONFIG_REASONER_MODEL}"
+
+# Make config value the primary source and env var the fallback
+EXPERIMENT_TIMEOUT="${CONFIG_TIMEOUT:-${EXPERIMENT_TIMEOUT:-600}}"
 echo "Final EXPERIMENT_TIMEOUT being used: ${EXPERIMENT_TIMEOUT}"
+
+# Set OLLAMA_DEFAULT_MODEL from config if not already set
+if [ -z "${OLLAMA_DEFAULT_MODEL:-}" ] && [ -n "${CONFIG_REASONER_MODEL}" ]; then
+    export OLLAMA_DEFAULT_MODEL="${CONFIG_REASONER_MODEL}"
+    echo "Set OLLAMA_DEFAULT_MODEL to ${OLLAMA_DEFAULT_MODEL} from config file"
+fi
+
+# Log the final value
+echo "Final OLLAMA_DEFAULT_MODEL being used: ${OLLAMA_DEFAULT_MODEL:-not set}"
 
 : "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
 
@@ -47,6 +58,11 @@ if [[ ! -r "$readonly_data" ]]; then echo "❌ Cannot read $readonly_data"; exit
 # Create run sub-dirs (the bind mount itself must already exist)
 mkdir -p "${EXPERIMENT_RUN_PATH}"/{hypothesis,planning,experiment,results,findings,scratchpad,logs}
 touch "${EXPERIMENT_RUN_PATH}"/experiment/run_experiment.sh
+
+# Set up Pyright cache directory
+export PYRIGHT_PYTHON_CACHE_DIR="${EXPERIMENT_RUN_PATH}/scratchpad"
+echo "✓ Pyright cache directory set to: ${PYRIGHT_PYTHON_CACHE_DIR}"
+
 if [[ ! -w "$EXPERIMENT_RUN_PATH" ]]; then
   echo "❌ Cannot write to $EXPERIMENT_RUN_PATH"; exit 1
 else
@@ -106,7 +122,7 @@ echo "✓ File structure logged to ${EXPERIMENT_RUN_PATH}/file_structure.log"
 
 
 # -------------------------------------------------
-# 3.  Run the infra “setup tests” suite (pytest)
+# 3.  Run the infra "setup tests" suite (pytest)
 # -------------------------------------------------
 echo "Running container setup tests with pytest..."
 /app/infra/docker/setup_tests/run_tests.sh

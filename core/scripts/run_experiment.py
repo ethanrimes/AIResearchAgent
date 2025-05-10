@@ -104,15 +104,15 @@ def main():
         if not Path(config_path).exists():
             logger.error(f"Configuration file not found: {config_path}")
             sys.exit(1)
-            
-        # Add this to run_experiment.py after loading config
-        if "max_run_duration" in config:
-            logger.info(f"Using timeout from config: {config['max_run_duration']}s")
-            os.environ["EXPERIMENT_TIMEOUT"] = str(config["max_run_duration"])
         
         # Read the config file
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
+
+        # Add this to run_experiment.py after loading config
+        if "max_run_duration" in config:
+            logger.info(f"Using timeout from config: {config['max_run_duration']}s")
+            os.environ["EXPERIMENT_TIMEOUT"] = str(config["max_run_duration"])
         
         # Override config values with environment variables if they exist
         if os.environ.get("DATASET_PATH"):

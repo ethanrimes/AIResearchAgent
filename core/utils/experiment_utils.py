@@ -144,6 +144,7 @@ def run_pyright_type_check(experiment_dir: Path) -> Dict[str, Any]:
     """
     import subprocess
     import json
+    import os
     from pathlib import Path
     
     logger = logging.getLogger("ai_research_agent.experiment_utils")
@@ -161,13 +162,19 @@ def run_pyright_type_check(experiment_dir: Path) -> Dict[str, Any]:
         if not python_files:
             logger.info("No Python files found for type checking")
             return result
-            
+        
+        # Set environment for pyright (use existing environment and update)
+        env = os.environ.copy()
+        cache_dir = env.get('PYRIGHT_PYTHON_CACHE_DIR')
+        if cache_dir:
+            logger.info(f"Using pyright cache directory: {cache_dir}")
+        
         # Run pyright on each file
         for py_file in python_files:
             try:
                 # Use strict mode for better type checking
                 cmd = ["pyright", "--outputjson", str(py_file)]
-                process = subprocess.run(cmd, capture_output=True, text=True)
+                process = subprocess.run(cmd, capture_output=True, text=True, env=env)
                 
                 # Parse output
                 if process.returncode != 0:

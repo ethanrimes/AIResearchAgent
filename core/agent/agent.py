@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
-import openai          # <-- add
+import openai
 
 from core.utils.path_utils import get_active_run_timestamp
 
@@ -25,7 +25,7 @@ from core.agent.chains.hypothesis_chain import HypothesisChain
 from core.agent.chains.planner_chain import PlannerChain
 from core.agent.chains.experiment_chain import ExperimentChain
 from core.agent.chains.evaluator_chain import EvaluatorChain
-from core.agent.chains.critique_chain import CritiqueChain  # Add import for CritiqueChain
+from core.agent.chains.critique_chain import CritiqueChain
 
 # Import utility functions
 from core.utils.directive_utils import load_directive
@@ -44,6 +44,10 @@ class Agent:
         """
         self.logger = logging.getLogger("ai_research_agent.agent")
         self.config = self._load_config(config_path)
+        
+        # Set environment variables for the Ollama client
+        self._set_environment_variables()
+        
         try:
             self.run_id = get_active_run_timestamp()
         except Exception:
@@ -60,6 +64,19 @@ class Agent:
         self.logger.info(f"Agent initialized with run ID: {self.run_id}")
         self.logger.info(f"Using agent model: {self.config['agent_model']}")
         self.logger.info(f"Using reasoner model: {self.config['reasoner_model']}")
+        
+    def _set_environment_variables(self):
+        """
+        Set environment variables needed by downstream components.
+        """
+        # Set the OLLAMA_DEFAULT_MODEL environment variable from config
+        if 'reasoner_model' in self.config:
+            os.environ["OLLAMA_DEFAULT_MODEL"] = self.config['reasoner_model']
+            self.logger.info(f"Set OLLAMA_DEFAULT_MODEL to {self.config['reasoner_model']}")
+        else:
+            self.logger.warning("No reasoner_model found in config, OLLAMA_DEFAULT_MODEL not set")
+            
+        # You can add more environment variables here if needed
         
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """

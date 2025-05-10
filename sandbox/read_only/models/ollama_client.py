@@ -94,10 +94,9 @@ class OllamaClient:
     GENERATE_ENDPOINT = "/api/generate"
 
     # ---------- construction & immutability helpers ----------
-    def __init__(self,
-                 base_url: Optional[str] = None) -> None:
+    def __init__(self) -> None:
         object.__setattr__(self, "_base_url",
-                           base_url or os.getenv("OLLAMA_BASE_URL",
+                           os.getenv("OLLAMA_BASE_URL",
                                                  "http://host.docker.internal:11434"))
         object.__setattr__(self, "_default_model",
                            os.getenv("OLLAMA_DEFAULT_MODEL"))

@@ -1,6 +1,19 @@
 #!/bin/bash
 set -e
 
+# Extract timeout from default_config.yaml
+CONFIG_TIMEOUT=$(python -c "
+import yaml
+with open('core/config/default_config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+print(config.get('max_run_duration', 600))
+")
+
+# Export the timeout value from config
+export EXPERIMENT_TIMEOUT="${CONFIG_TIMEOUT}"
+echo "Using timeout from config: ${EXPERIMENT_TIMEOUT}s"
+
+
 # Generate timestamped run directory
 timestamp=$(date +"%Y-%m-%dT%H-%M-%S")
 run_dir="sandbox/writable/run_$timestamp"
@@ -8,6 +21,9 @@ run_dir="sandbox/writable/run_$timestamp"
 # Create the run directory on the host
 mkdir -p "$run_dir"
 echo "Created run directory: $run_dir"
+
+# Copy pyright configuration to experiment directory
+cp core/config/package_config/pyrightconfig.json "$run_dir/pyrightconfig.json"
 
 # Set permissions if needed
 chmod 777 "$run_dir"
