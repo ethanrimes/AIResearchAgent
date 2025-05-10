@@ -10,7 +10,7 @@ from sandbox.read_only.dataloader.rstar_data_loader import rStarDataLoader
 @pytest.fixture
 def loader():
     # Set environment variable for the dataset path
-    os.environ["DATASET_PATH"] = "/app/data/rstar/amc23_test.json"
+    os.environ["DATASET_PATH"] = "/data/rstar/amc23_test.json"
     # Create the loader instance
     return rStarDataLoader()
 
