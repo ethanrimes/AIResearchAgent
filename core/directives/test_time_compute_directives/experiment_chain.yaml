@@ -17,11 +17,15 @@ context: |
   The goal is to evaluate strategies for improving LLM mathematical reasoning at test time. You will implement each strategy described in the plan and run it on a shared dataset, using the Ollama-hosted LLM. You must use specific, pre-approved modules from the read-only environment.
 
 constraints: |
-  - READ access: /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning. Read these files for context.
-  - WRITE access: {ACTIVE_RUN_PATH}/experiment. Write your final solution to this directory.
-  - EXECUTION: Bash commands may be run with the RunBashTool from {ACTIVE_RUN_PATH}/experiment. Results may only be written to {ACTIVE_RUN_PATH}/results. 
-  - EXECUTION: RunCodeTool may be used to test small snippets of code
-  - Do not access any other directories.
+  - You have access to the following tools:
+    - read_file: Read files from /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning, and {ACTIVE_RUN_PATH}/experiment
+    - write_file: Create or overwrite files in {ACTIVE_RUN_PATH}/experiment only
+    - update_file: Make partial modifications to existing files in {ACTIVE_RUN_PATH}/experiment only
+    - delete_file: Remove files from {ACTIVE_RUN_PATH}/experiment only
+    - list_files: View directory contents in /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning, and {ACTIVE_RUN_PATH}/experiment
+    - run_bash: Execute bash commands in {ACTIVE_RUN_PATH}/experiment. Results may only be written to {ACTIVE_RUN_PATH}/results
+    - run_code: Execute small Python code snippets for testing
+  - Do not access any other directories outside of these permissions.
 
 instructions: |
   - Read the hypotheses from {ACTIVE_RUN_PATH}/hypothesis and the experiment plan from {ACTIVE_RUN_PATH}/planning.

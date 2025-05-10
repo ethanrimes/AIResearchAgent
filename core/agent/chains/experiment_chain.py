@@ -34,6 +34,9 @@ from langchain.schema import SystemMessage
 # ----------------------------------------------------------------------
 from core.agent.tools.read_file import ReadFileTool
 from core.agent.tools.write_file import WriteFileTool
+from core.agent.tools.update_file import UpdateFileTool
+from core.agent.tools.delete_file import DeleteFileTool
+from core.agent.tools.list_files import ListFilesTool
 from core.agent.tools.run_bash import RunBashTool
 from core.agent.tools.run_code import RunCodeTool
 from core.utils.path_utils import get_active_run_path
@@ -110,8 +113,27 @@ class ExperimentChain:
             ]
         )
 
+        # Write, Update, and Delete tools only have access to experiment directory
         write_tool = WriteFileTool(
             allowed_dirs=[str(self.exp_dir)]
+        )
+        
+        update_tool = UpdateFileTool(
+            allowed_dirs=[str(self.exp_dir)]
+        )
+        
+        delete_tool = DeleteFileTool(
+            allowed_dirs=[str(self.exp_dir)]
+        )
+        
+        # List Files has access to read-only and experiment directories
+        list_files_tool = ListFilesTool(
+            allowed_dirs=[
+                str(self.workspace["read_only"]),
+                str(self.workspace["hypothesis"]),
+                str(self.workspace["planning"]),
+                str(self.workspace["experiment"]),
+            ]
         )
 
         self.run_bash_tool = RunBashTool(
@@ -123,6 +145,9 @@ class ExperimentChain:
         return [
             read_tool,
             write_tool,
+            update_tool,
+            delete_tool,
+            list_files_tool,
             self.run_bash_tool,  # keep reference
             run_code_tool,
         ]

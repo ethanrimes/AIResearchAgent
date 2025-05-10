@@ -96,22 +96,23 @@ class OllamaClient:
     # ---------- construction & immutability helpers ----------
     def __init__(self) -> None:
         object.__setattr__(self, "_base_url",
-                           os.getenv("OLLAMA_BASE_URL",
-                                                 "http://host.docker.internal:11434"))
+                        os.getenv("OLLAMA_BASE_URL",
+                                                "http://host.docker.internal:11434"))
         object.__setattr__(self, "_default_model",
-                           os.getenv("OLLAMA_DEFAULT_MODEL"))
+                        os.getenv("OLLAMA_DEFAULT_MODEL"))
         if not self._default_model:
             raise ValueError("A default model must be supplied via "
-                             "OLLAMA_DEFAULT_MODEL environment variable.")
+                            "OLLAMA_DEFAULT_MODEL environment variable.")
         object.__setattr__(self, "_session", requests.Session())
+        
+        # Create logger before freezing the object
+        object.__setattr__(self, "logger", logging.getLogger("ai_research_agent.ollama_client"))
 
         # immediately verify connectivity
         self._check_connection()
 
         # *freeze* – disallow changes to critical attrs after this point
         object.__setattr__(self, "_immutable", True)
-
-        self.logger = logging.getLogger("ai_research_agent.ollama_client")
 
     def __setattr__(self, name: str, value: Any) -> None:
         # prevent external mutation of critical fields once initialised

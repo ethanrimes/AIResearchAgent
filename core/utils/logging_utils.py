@@ -11,7 +11,7 @@ from datetime import datetime
 from core.utils.path_utils import get_active_run_timestamp
 
 
-def setup_logging(run_dir=None, level=logging.INFO, log_name=None):
+def setup_logging(run_dir=None, level=logging.INFO, log_name=None, capture_docker=True):
     """
     Set up logging with console and file handlers.
     
@@ -21,6 +21,7 @@ def setup_logging(run_dir=None, level=logging.INFO, log_name=None):
         level (int, optional): Logging level. Defaults to logging.INFO.
         log_name (str, optional): Name for the log file. 
                                  If None, a timestamped name will be used.
+        capture_docker (bool): Whether to capture Docker logs. Defaults to True.
                                  
     Returns:
         logging.Logger: Configured logger object.
@@ -65,6 +66,27 @@ def setup_logging(run_dir=None, level=logging.INFO, log_name=None):
         root_logger.addHandler(file_handler)
         
         root_logger.info(f"Log file created at: {log_file_path}")
+        
+        # Capture Docker container logs if requested
+        # Instead of trying to use Docker CLI, just capture stdout/stderr
+        import sys
+        
+        class StreamToLogger:
+            def __init__(self, logger, log_level=logging.INFO):
+                self.logger = logger
+                self.log_level = log_level
+                self.linebuf = ''
+
+            def write(self, buf):
+                for line in buf.rstrip().splitlines():
+                    self.logger.log(self.log_level, line.rstrip())
+                
+            def flush(self):
+                pass
+        
+        # Capture stdout and stderr
+        sys.stdout = StreamToLogger(root_logger, logging.INFO)
+        sys.stderr = StreamToLogger(root_logger, logging.ERROR)
     
     # Make sure handlers propagate to child loggers
     root_logger.propagate = False

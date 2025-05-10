@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -19,6 +19,32 @@ class WriteFileInput(BaseModel):
 
 
 class WriteFileOutput(BaseModel):
+    message: str
+
+
+class UpdateFileInput(BaseModel):
+    file_path: str = Field(..., description="Full path to the file to update")
+    old_content: str = Field(..., description="Content to be replaced")
+    new_content: str = Field(..., description="Content to replace with")
+
+
+class UpdateFileOutput(BaseModel):
+    message: str
+
+
+class DeleteFileInput(BaseModel):
+    file_path: str = Field(..., description="Full path to the file to delete")
+
+
+class DeleteFileOutput(BaseModel):
+    message: str
+
+
+class ListFilesInput(BaseModel):
+    directory_path: str = Field(..., description="Directory path to list files from")
+
+
+class ListFilesOutput(BaseModel):
     message: str
 
 
@@ -60,7 +86,7 @@ class WriteScratchpadOutput(BaseModel):
 
 class ReadScratchpadInput(BaseModel):
     query: Optional[str] = Field(
-        "", description="Ignored – may be empty or any string (‘read’, etc.)"
+        "", description="Ignored – may be empty or any string ('read', etc.)"
     )
 
 
