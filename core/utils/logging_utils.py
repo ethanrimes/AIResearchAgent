@@ -5,6 +5,7 @@ This module provides functions for setting up and configuring logging.
 """
 
 import os
+import sys
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -66,27 +67,6 @@ def setup_logging(run_dir=None, level=logging.INFO, log_name=None, capture_docke
         root_logger.addHandler(file_handler)
         
         root_logger.info(f"Log file created at: {log_file_path}")
-        
-        # Capture Docker container logs if requested
-        # Instead of trying to use Docker CLI, just capture stdout/stderr
-        import sys
-        
-        class StreamToLogger:
-            def __init__(self, logger, log_level=logging.INFO):
-                self.logger = logger
-                self.log_level = log_level
-                self.linebuf = ''
-
-            def write(self, buf):
-                for line in buf.rstrip().splitlines():
-                    self.logger.log(self.log_level, line.rstrip())
-                
-            def flush(self):
-                pass
-        
-        # Capture stdout and stderr
-        sys.stdout = StreamToLogger(root_logger, logging.INFO)
-        sys.stderr = StreamToLogger(root_logger, logging.ERROR)
     
     # Make sure handlers propagate to child loggers
     root_logger.propagate = False

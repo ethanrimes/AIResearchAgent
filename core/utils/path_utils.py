@@ -10,7 +10,6 @@ def get_active_run_path():
     Returns:
         Path object representing the active run path.
     """
-    import logging
     from pathlib import Path
 
     logger = logging.getLogger("ai_research_agent.path_utils")
@@ -26,8 +25,6 @@ def get_active_run_path():
         raise ValueError("Active run path is empty")
 
     run_path = Path(run_path)
-    
-    logger.info(f"Active run path found: {run_path}")
 
     if not run_path.exists():
         run_path.mkdir(parents=True, exist_ok=True)

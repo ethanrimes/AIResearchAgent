@@ -4,6 +4,11 @@ services:
       context: ..
       dockerfile: infra/docker/Dockerfile
     container_name: ai-research-agent
+    logging:
+      driver: "local"  # More efficient than json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - LANGSMITH_TRACING=${LANGSMITH_TRACING}
       - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT}
@@ -29,6 +34,7 @@ services:
       # Mount the specific run directory with read-write permissions
       - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
       # now we can modify entry point without rebuilding
+      - ${HOST_RUN_DIR}/logs:/var/log/container:rw
     read_only: true
     tmpfs:
       - /tmp

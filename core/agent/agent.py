@@ -76,7 +76,13 @@ class Agent:
         else:
             self.logger.warning("No reasoner_model found in config, OLLAMA_DEFAULT_MODEL not set")
             
-        # You can add more environment variables here if needed
+        # Set the DATASET_PATH environment variable from config
+        if 'dataset_path' in self.config:
+            os.environ["DATASET_PATH"] = self.config['dataset_path']
+            self.logger.info(f"Set DATASET_PATH to {self.config['dataset_path']}")
+        else:
+            self.logger.warning("No dataset_path found in config, DATASET_PATH not set")
+        
         
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """

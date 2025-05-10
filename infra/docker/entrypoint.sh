@@ -120,6 +120,14 @@ ls -la /app/sandbox/read_only/dataloader >> "${EXPERIMENT_RUN_PATH}/file_structu
 
 echo "✓ File structure logged to ${EXPERIMENT_RUN_PATH}/file_structure.log"
 
+# Tee logs to host
+mkdir -p "${EXPERIMENT_RUN_PATH}/logs"
+LOG_FILE="${EXPERIMENT_RUN_PATH}/logs/container.log"
+
+# Use exec with tee to capture all output
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "Logging container output to $LOG_FILE"
 
 # -------------------------------------------------
 # 3.  Run the infra "setup tests" suite (pytest)
@@ -143,3 +151,6 @@ timeout "${EXPERIMENT_TIMEOUT}" python /app/core/scripts/run_experiment.py
 
 # Keep the container alive if no experiment is launched
 echo "Container initialisation finished."
+
+
+
