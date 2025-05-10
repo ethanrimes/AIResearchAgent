@@ -35,8 +35,14 @@ class rStarDataLoader:
         self.dataset_path = os.environ.get("DATASET_PATH")
         self.logger.info(f"Loading dataset from: {self.dataset_path}")
         
+        if not os.path.isabs(dataset_path):
+            dataset_path = os.path.join("/app", dataset_path)
+        
+        self.dataset_path = dataset_path
+        self.logger.info(f"Loading dataset from: {self.dataset_path}")
+        
         try:
-            with open(os.environ.get("DATASET_PATH"), "r", encoding="utf-8") as f:
+            with open(self.dataset_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
             self.logger.error(f"Error loading dataset: {e}")
