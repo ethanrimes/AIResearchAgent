@@ -40,7 +40,7 @@ class GenerationParameters:
     format: Optional[str] = None
 
     # generation options
-    num_predict: Optional[int] = None
+    num_predict: Optional[int] = 32768
     temperature: Optional[float] = None
     top_k: Optional[int] = None
     top_p: Optional[float] = None
@@ -55,7 +55,7 @@ class GenerationParameters:
     tfs_z: Optional[float] = None
     num_gpu: Optional[int] = None
     num_thread: Optional[int] = None
-    num_ctx: Optional[int] = None
+    num_ctx: Optional[int] = 32768
     num_batch: Optional[int] = None
     num_keep: Optional[int] = None
 
@@ -70,8 +70,8 @@ class GenerationParameters:
         if self.raw:                    d["raw"]      = True
         if self.format is not None:     d["format"]   = self.format
 
-        # collect generation-options
-        base_fields = set(d.keys()) | {"model", "prompt"}
+        # collect generation-options (excluding stream which should be top-level)
+        base_fields = set(d.keys()) | {"model", "prompt", "stream", "raw"}
         options = {k: v for k, v in self.__dict__.items()
                    if k not in base_fields and v is not None}
         if options:
@@ -155,21 +155,66 @@ class OllamaClient:
         data["model"] = self._default_model   # hard-overwrite
         return data
 
-    def _make_request(self,
-                      endpoint: str,
-                      data: Dict[str, Any],
-                      *,
-                      stream: bool = False,
-                      timeout: Optional[float] = None
-                      ) -> Union[requests.Response, Dict[str, Any]]:
+    def _make_request(self, endpoint: str, data: Dict[str, Any], *, stream: bool = False, timeout: Optional[float] = None) -> Union[requests.Response, Dict[str, Any]]:
         url = self._get_url(endpoint)
 
-        if stream:
+        # Double-check stream setting between function param and data to ensure consistency
+        if "stream" in data:
+            is_streaming = data["stream"]
+        else:
+            is_streaming = stream
+
+        if is_streaming:
             return self._session.post(url, json=data, stream=True, timeout=timeout)
         
-        resp = self._session.post(url, json=data, timeout=timeout)
+        # Explicitly ensure stream is set to False in data for non-streaming requests
+        data_copy = data.copy()
+        data_copy["stream"] = False
+        
+        # For non-streaming requests, use requests.post directly with the URL
+        resp = requests.post(url, json=data_copy, timeout=timeout)
         resp.raise_for_status()
-        return resp.json() if resp.content else resp
+        
+        if not resp.content:
+            return resp
+
+        # Handle different response formats based on content type
+        content_type = resp.headers.get('Content-Type', '')
+        
+        # If we're getting ndjson even though we requested non-streaming
+        if 'application/x-ndjson' in content_type:
+            # Combine all the chunks into a single response
+            try:
+                lines = resp.text.strip().split("\n")
+                if not lines:
+                    return {"response": ""}
+                
+                # Extract and concatenate all responses
+                full_response = ""
+                for line in lines:
+                    try:
+                        chunk = json.loads(line)
+                        if "response" in chunk:
+                            full_response += chunk["response"]
+                    except json.JSONDecodeError:
+                        continue
+                
+                # Get metadata from the last chunk if possible
+                try:
+                    last_chunk = json.loads(lines[-1])
+                    result = {**last_chunk, "response": full_response}
+                    return result
+                except (json.JSONDecodeError, IndexError):
+                    return {"response": full_response}
+            except Exception as e:
+                self.logger.error(f"Error processing NDJSON response: {e}")
+                return {"response": resp.text}
+        
+        # Standard JSON response processing
+        try:
+            return resp.json()
+        except json.JSONDecodeError:
+            return {"response": resp.text}
 
     # ---------- public API ----------
     def generate(self,
@@ -187,14 +232,36 @@ class OllamaClient:
         """
         data = self._enforce_defaults(params)
 
-        if data.get("stream"):
-            # redirect to streaming helper
+        # Ensure stream parameter is at the top level, not inside options
+        is_streaming = False
+        if isinstance(params, GenerationParameters):
+            is_streaming = params.stream
+        elif isinstance(params, dict):
+            is_streaming = params.get("stream", False)
+        
+        # Override stream setting in data
+        if "options" in data and "stream" in data["options"]:
+            # If stream was in options, move it to top level
+            data["stream"] = data["options"].pop("stream")
+            # Remove options if empty after popping stream
+            if not data["options"]:
+                data.pop("options")
+        
+        if is_streaming or data.get("stream", False):
+            # Set stream flag directly in data
+            data["stream"] = True
+            self.logger.info("Request set to streaming mode")
+            # Redirect to streaming helper
             return {   # wrap generator in dict for symmetric API
                 "stream": self.generate_stream(data, timeout=timeout)
             }
+        
+        # Ensure stream is explicitly set to False for non-streaming requests
+        data["stream"] = False
+        self.logger.info("Request set to non-streaming mode")
 
         t0 = time.time()
-        resp = self._make_request(self.GENERATE_ENDPOINT, data, timeout=timeout)
+        resp = self._make_request(self.GENERATE_ENDPOINT, data, stream=False, timeout=timeout)
         elapsed = time.time() - t0
         resp["metrics"] = {
             "inference_time": elapsed,

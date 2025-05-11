@@ -27,14 +27,13 @@ services:
       - ../core:/app/core:ro
       # Mount data directory as read-only
       - ../data:/app/data:ro
+      - ../data:/data:ro
       # Mount read_only directory with read-only permissions
       - ../sandbox/read_only:/app/sandbox/read_only:ro
       # Mount writable directories with read-only permissions by default
       # - ../sandbox/writable:/app/sandbox/writable:ro
       # Mount the specific run directory with read-write permissions
       - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
-      # now we can modify entry point without rebuilding
-      - ${HOST_RUN_DIR}/logs:/var/log/container:rw
     read_only: true
     tmpfs:
       - /tmp

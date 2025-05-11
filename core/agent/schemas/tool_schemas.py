@@ -15,7 +15,7 @@ class ReadFileOutput(BaseModel):
 
 class WriteFileInput(BaseModel):
     file_path: str = Field(..., description="Full path to the file to write")
-    content: str = Field(..., description="Content that will be written to the file")
+    content: str = Field("", description="Content that will be written to the file")
 
 
 class WriteFileOutput(BaseModel):
@@ -24,8 +24,8 @@ class WriteFileOutput(BaseModel):
 
 class UpdateFileInput(BaseModel):
     file_path: str = Field(..., description="Full path to the file to update")
-    old_content: str = Field(..., description="Content to be replaced")
-    new_content: str = Field(..., description="Content to replace with")
+    old_content: str = Field("", description="Content to be replaced")
+    new_content: str = Field("", description="Content to replace with")
 
 
 class UpdateFileOutput(BaseModel):
@@ -82,7 +82,6 @@ class WriteScratchpadInput(BaseModel):
 
 class WriteScratchpadOutput(BaseModel):
     message: str
-
 
 class ReadScratchpadInput(BaseModel):
     query: Optional[str] = Field(

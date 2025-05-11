@@ -1,5 +1,5 @@
 agent_model: o4-mini
-reasoner_model: qwen3:1.7b
+reasoner_model: qwen3:0.6b
 directives_path: core/directives/test_time_compute_directives
 dataset_path: data/rstar/aime2024_test.json
 max_coding_iters: 20
