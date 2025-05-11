@@ -23,9 +23,18 @@ class WriteFileOutput(BaseModel):
 
 
 class UpdateFileInput(BaseModel):
-    file_path: str = Field(..., description="Full path to the file to update")
-    old_content: str = Field("", description="Content to be replaced")
-    new_content: str = Field("", description="Content to replace with")
+    file_path: str = Field(
+        ..., 
+        description="Full path to the file to update. Must be in an allowed directory."
+    )
+    old_content: str = Field(
+        ..., 
+        description="Exact content to be replaced. Must match exactly (including whitespace and line breaks)."
+    )
+    new_content: str = Field(
+        ..., 
+        description="Content that will replace all occurrences of the old_content."
+    )
 
 
 class UpdateFileOutput(BaseModel):

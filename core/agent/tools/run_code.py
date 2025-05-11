@@ -36,13 +36,14 @@ class RunCodeTool(BaseTool):
         super().__init__(max_execution_time=max_execution_time, logger=logger)
 
     # --------------------------------------------------
-    def _run(self, code: str) -> str:
-        if not code:
-            return "ERROR: No code provided."
-
-        stdout_buf, stderr_buf = StringIO(), StringIO()
-
+    def _run(self, code: str = None) -> str:
+        # Validate parameters
+        if code is None:
+            return "ERROR: Required parameter 'code' is missing"
+        
         try:
+            stdout_buf, stderr_buf = StringIO(), StringIO()
+
             import tempfile
 
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -74,6 +75,7 @@ class RunCodeTool(BaseTool):
             return f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
         except Exception as e:
             tb = traceback.format_exc()
+            self.logger.error(f"Error running code: {str(e)}\n{tb}")
             return f"ERROR: {str(e)}\n\nTraceback:\n{tb}"
 
     async def _arun(self, code: str) -> str:

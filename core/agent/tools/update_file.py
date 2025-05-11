@@ -19,7 +19,10 @@ class UpdateFileTool(BaseTool):
     description: str = (
         "Use this tool to update a file with partial modifications. You must provide "
         "the full path to the file, the old content to be replaced, and the new content "
-        "to replace it with. The file must be in one of the allowed directories."
+        "to replace it with. The file must be in one of the allowed directories.\n\n"
+        "IMPORTANT: The old_content must match EXACTLY with text in the file (including spaces and line breaks). "
+        "If old_content appears multiple times, ALL occurrences will be replaced.\n\n"
+        "Example: update_file(file_path='/app/config.py', old_content='DEBUG = False', new_content='DEBUG = True')"
     )
     args_schema: ClassVar[Type[UpdateFileInput]] = UpdateFileInput
     allowed_dirs: List[Path] = Field(...)
@@ -46,7 +49,13 @@ class UpdateFileTool(BaseTool):
         return False
 
     # --------------------------------------------------
-    def _run(self, file_path: str, old_content: str, new_content: str) -> str:
+    def _run(self, file_path: str, old_content: str = None, new_content: str = None) -> str:
+        # Validate parameters
+        if old_content is None:
+            return "ERROR: Required parameter 'old_content' is missing"
+        if new_content is None:
+            return "ERROR: Required parameter 'new_content' is missing"
+        
         path = Path(file_path)
 
         if not self._is_path_allowed(path):

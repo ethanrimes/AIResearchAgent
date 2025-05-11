@@ -41,9 +41,10 @@ class RunBashTool(BaseTool):
             output_dir_path.mkdir(parents=True, exist_ok=True)
 
     # --------------------------------------------------
-    def _run(self, command: str) -> str:
-        if not command:
-            return "ERROR: No command provided."
+    def _run(self, command: str = None) -> str:
+        # Validate parameters
+        if command is None:
+            return "ERROR: Required parameter 'command' is missing"
 
         try:
             self.logger.info("Running bash command: %s", command)
@@ -136,7 +137,9 @@ class RunBashTool(BaseTool):
             proc.kill()
             return "ERROR: Command timed out after 600 seconds."
         except Exception as e:
-            return f"ERROR: Failed to run command: {str(e)}"
+            error_msg = f"ERROR: Failed to run command: {str(e)}"
+            self.logger.error(error_msg)
+            return error_msg
 
     async def _arun(self, command: str) -> str:
         return self._run(command)

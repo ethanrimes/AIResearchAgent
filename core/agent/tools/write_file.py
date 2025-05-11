@@ -46,7 +46,14 @@ class WriteFileTool(BaseTool):
         return False
 
     # --------------------------------------------------
-    def _run(self, file_path: str, content: str) -> str:
+    def _run(self, file_path: str = None, content: str = None) -> str:
+        # Validate parameters
+        if file_path is None:
+            return "ERROR: Required parameter 'file_path' is missing"
+        if content is None:
+            return "ERROR: Required parameter 'content' is missing"
+        
+        
         path = Path(file_path)
 
         if not self._is_path_allowed(path):

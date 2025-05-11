@@ -50,29 +50,33 @@ class ListFilesTool(BaseTool):
         return False
 
     # --------------------------------------------------
-    def _run(self, directory_path: str) -> str:
-        path = Path(directory_path)
-
-        if not self._is_path_allowed(path):
-            allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
-            error_msg = (
-                f"Access denied: {directory_path} is not in an allowed directory. "
-                f"Allowed directories: {allowed_dirs_str}"
-            )
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
-        if not path.exists():
-            error_msg = f"Directory not found: {directory_path}"
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
-        if not path.is_dir():
-            error_msg = f"Not a directory: {directory_path}"
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
+    def _run(self, directory_path: str = None) -> str:
+    # Validate parameters
+        if directory_path is None:
+            return "ERROR: Required parameter 'directory_path' is missing"
+        
         try:
+            path = Path(directory_path)
+
+            if not self._is_path_allowed(path):
+                allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
+                error_msg = (
+                    f"Access denied: {directory_path} is not in an allowed directory. "
+                    f"Allowed directories: {allowed_dirs_str}"
+                )
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
+            if not path.exists():
+                error_msg = f"Directory not found: {directory_path}"
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
+            if not path.is_dir():
+                error_msg = f"Not a directory: {directory_path}"
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
             # List all files in the directory
             files = [str(f.relative_to(path)) for f in path.iterdir() if f.is_file()]
             dirs = [str(d.relative_to(path)) + "/" for d in path.iterdir() if d.is_dir()]

@@ -45,24 +45,28 @@ class DeleteFileTool(BaseTool):
         return False
 
     # --------------------------------------------------
-    def _run(self, file_path: str) -> str:
-        path = Path(file_path)
-
-        if not self._is_path_allowed(path):
-            allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
-            error_msg = (
-                f"Access denied: {file_path} is not in an allowed directory. "
-                f"Allowed directories: {allowed_dirs_str}"
-            )
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
-        if not path.exists():
-            error_msg = f"File not found: {file_path}"
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
+    def _run(self, file_path: str = None) -> str:
+    # Validate parameters
+        if file_path is None:
+            return "ERROR: Required parameter 'file_path' is missing"
+        
         try:
+            path = Path(file_path)
+
+            if not self._is_path_allowed(path):
+                allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
+                error_msg = (
+                    f"Access denied: {file_path} is not in an allowed directory. "
+                    f"Allowed directories: {allowed_dirs_str}"
+                )
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
+            if not path.exists():
+                error_msg = f"File not found: {file_path}"
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
             path.unlink()
             self.logger.info("Successfully deleted file: %s", file_path)
             return f"Successfully deleted file: {file_path}"

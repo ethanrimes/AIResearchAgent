@@ -53,29 +53,33 @@ class ReadFileTool(BaseTool):
     # --------------------------------------------------
     # Core
     # --------------------------------------------------
-    def _run(self, file_path: str) -> str:  # <- matches schema field name
-        path = Path(file_path)
-
-        if not self._is_path_allowed(path):
-            allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
-            error_msg = (
-                f"Access denied: {file_path} is not in an allowed directory. "
-                f"Allowed directories: {allowed_dirs_str}"
-            )
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
-        if not path.exists():
-            error_msg = f"File not found: {file_path}"
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
-        if not path.is_file():
-            error_msg = f"Not a file: {file_path}"
-            self.logger.error(error_msg)
-            return f"ERROR: {error_msg}"
-
+    def _run(self, file_path: str = None) -> str:  # <- matches schema field name
+        # Validate parameters
+        if file_path is None:
+            return "ERROR: Required parameter 'file_path' is missing"
+            
         try:
+            path = Path(file_path)
+
+            if not self._is_path_allowed(path):
+                allowed_dirs_str = ", ".join(str(d) for d in self.allowed_dirs)
+                error_msg = (
+                    f"Access denied: {file_path} is not in an allowed directory. "
+                    f"Allowed directories: {allowed_dirs_str}"
+                )
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
+            if not path.exists():
+                error_msg = f"File not found: {file_path}"
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
+            if not path.is_file():
+                error_msg = f"Not a file: {file_path}"
+                self.logger.error(error_msg)
+                return f"ERROR: {error_msg}"
+
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
             self.logger.info("Successfully read file: %s", file_path)
@@ -84,6 +88,6 @@ class ReadFileTool(BaseTool):
             error_msg = f"Error reading file {file_path}: {str(e)}"
             self.logger.error(error_msg)
             return f"ERROR: {error_msg}"
-
+        
     async def _arun(self, file_path: str) -> str:
         return self._run(file_path)

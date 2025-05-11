@@ -119,3 +119,4 @@ yarl==1.20.0
 zstandard==0.23.0
 nodeenv==1.9.1
 pyright[nodejs]==1.1.400
+jsonlines==4.0.0
