@@ -97,6 +97,9 @@ class CritiqueChain:
         # Get type check results on direct experiment path
         type_check_results = run_pyright_type_check(Path("/experiment"))
         
+        hypotheses_content = "{}"
+        experiment_plan = "{}"
+        
         if hypothesis_file.exists():
             try:
                 hypotheses_content = json.dumps(json.loads(hypothesis_file.read_text()), indent=2)
@@ -116,7 +119,8 @@ class CritiqueChain:
         input_text = ("Review the experiment implementation code against the specified requirements "
                     "and output a structured evaluation. Focus on validating that all hypotheses "
                     "are properly implemented, all required files exist, and the code meets "
-                    "all requirements in the checklist. Include type checking results in your evaluation.")
+                    "all requirements in the checklist. Evaluate progress against each step in the "
+                    "build sequence from the experiment plan. Include type checking results in your evaluation.")
         
         # Run the chain with structured output
         result = self.llm.with_structured_output(CritiqueOutput).invoke(

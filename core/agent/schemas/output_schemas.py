@@ -1,4 +1,3 @@
-## 2. Updated output_schemas.py
 """
 Pydantic output schemas for the agent chains.
 """
@@ -172,6 +171,15 @@ class FileStatus(BaseModel):
     summary: FileStatusSummary = Field(..., description="Summary of file completion status")
 
 
+class BuildStepProgress(BaseModel):
+    step: int = Field(..., description="Step number from the build sequence")
+    description: str = Field(..., description="Description of the build step from plan")
+    files: List[str] = Field(..., description="Files associated with this build step")
+    status: str = Field(..., description="Status: not_started, in_progress, or completed")
+    completed_elements: List[str] = Field(default_factory=list, description="Description of elements that have been implemented")
+    remaining_elements: List[str] = Field(default_factory=list, description="Description of elements still to be implemented")
+
+
 class TypeCheckResults(BaseModel):
     has_errors: bool = Field(..., description="Whether type checking found any errors")
     error_count: int = Field(..., description="Number of type errors found")
@@ -182,4 +190,5 @@ class CritiqueOutput(BaseModel):
     requirements_met: RequirementsMet
     file_status: FileStatus
     type_check_results: TypeCheckResults
+    build_sequence_progress: List[BuildStepProgress] = Field(default_factory=list, description="Progress on each step in the build sequence")
     suggestions: List[str] = Field(default_factory=list, description="Improvement suggestions for unmet requirements")

@@ -42,8 +42,13 @@ class RunBashTool(BaseTool):
 
     # --------------------------------------------------
     def _run(self, command: str = None) -> str:
+        # Log all parameters when tool is called
+        params_str = ', '.join([f'{k}={v}' for k, v in locals().items() if k != 'self'])
+        self.logger.info(f"Tool {self.name} called with parameters: {params_str}")
+        
         # Validate parameters
         if command is None:
+            self.logger.error("Required parameter 'command' is missing")
             return "ERROR: Required parameter 'command' is missing"
 
         try:
@@ -72,7 +77,8 @@ class RunBashTool(BaseTool):
                 for line in iter(proc.stdout.readline, ''):
                     if line:
                         clean_line = line.rstrip()
-                        self.logger.info(clean_line)
+                        # Always log each line of stdout at INFO level
+                        self.logger.info("[STDOUT] %s", clean_line)
                         stdout_lines.append(line)
                 proc.stdout.close()
 
@@ -80,7 +86,8 @@ class RunBashTool(BaseTool):
                 for line in iter(proc.stderr.readline, ''):
                     if line:
                         clean_line = line.rstrip()
-                        self.logger.error(clean_line)
+                        # Always log each line of stderr at WARNING level
+                        self.logger.warning("[STDERR] %s", clean_line)
                         stderr_lines.append(line)
                 proc.stderr.close()
 
@@ -93,7 +100,16 @@ class RunBashTool(BaseTool):
             stderr_thread.start()
 
             # Wait for process to complete with timeout
-            rc = proc.wait(timeout=600)
+            try:
+                rc = proc.wait(timeout=600)
+                self.logger.info(f"Command completed with return code: {rc}")
+            except subprocess.TimeoutExpired as e:
+                self.logger.error("Command timed out after 600 seconds")
+                proc.kill()
+                # Wait for threads to finish after killing the process
+                stdout_thread.join(timeout=1)
+                stderr_thread.join(timeout=1)
+                return "ERROR: Command timed out after 600 seconds."
             
             # Wait for output threads to finish
             stdout_thread.join()
@@ -108,6 +124,7 @@ class RunBashTool(BaseTool):
                 import time
                 ts = time.strftime("%Y%m%d_%H%M%S")
                 out_file = self.output_dir / f"bash_output_{ts}.txt"
+                self.logger.info(f"Writing command output to {out_file}")
                 with open(out_file, "w", encoding="utf-8") as f:
                     f.write(f"Command: {command}\nReturn code: {rc}\n\n")
                     if stdout:
@@ -118,6 +135,7 @@ class RunBashTool(BaseTool):
             # Format and return the command result
             if rc == 0:
                 if not stdout and not stderr:
+                    self.logger.info("Command executed successfully with no output")
                     return "Command executed successfully with no output."
                 result = ""
                 if stdout:
@@ -126,19 +144,17 @@ class RunBashTool(BaseTool):
                     result += f"STDERR:\n{stderr}\n"
                 return result
             else:
+                self.logger.error(f"Command failed with return code {rc}")
                 result = f"Command failed with return code {rc}\n"
                 if stdout:
                     result += f"STDOUT:\n{stdout}\n"
                 if stderr:
                     result += f"STDERR:\n{stderr}\n"
                 return result
-        except subprocess.TimeoutExpired:
-            # Make sure to kill the process if it times out
-            proc.kill()
-            return "ERROR: Command timed out after 600 seconds."
+                
         except Exception as e:
             error_msg = f"ERROR: Failed to run command: {str(e)}"
-            self.logger.error(error_msg)
+            self.logger.error(error_msg, exc_info=True)  # Include the full traceback
             return error_msg
 
     async def _arun(self, command: str) -> str:

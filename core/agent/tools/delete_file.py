@@ -46,7 +46,11 @@ class DeleteFileTool(BaseTool):
 
     # --------------------------------------------------
     def _run(self, file_path: str = None) -> str:
-    # Validate parameters
+        # Log all parameters when tool is called
+        params_str = ', '.join([f'{k}={v}' for k, v in locals().items() if k != 'self'])
+        self.logger.info(f"Tool {self.name} called with parameters: {params_str}")
+        
+        # Validate parameters
         if file_path is None:
             return "ERROR: Required parameter 'file_path' is missing"
         

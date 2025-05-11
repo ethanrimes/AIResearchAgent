@@ -34,14 +34,19 @@ class RunCodeTool(BaseTool):
     def __init__(self, max_execution_time: int = 30):
         logger = logging.getLogger("ai_research_agent.run_code")
         super().__init__(max_execution_time=max_execution_time, logger=logger)
+        logger.info("RunCodeTool initialized with max_execution_time: %s", max_execution_time)
 
     # --------------------------------------------------
     def _run(self, code: str = None) -> str:
+        # Log all parameters when tool is called
+        self.logger.info(f"Tool {self.name} called with code snippet of length: {len(code) if code else 0}")
+        
         # Validate parameters
         if code is None:
             return "ERROR: Required parameter 'code' is missing"
         
         try:
+            self.logger.info("Executing Python code snippet")
             stdout_buf, stderr_buf = StringIO(), StringIO()
 
             import tempfile
@@ -49,6 +54,7 @@ class RunCodeTool(BaseTool):
             with tempfile.TemporaryDirectory() as tmpdir:
                 script_path = Path(tmpdir) / "snippet.py"
                 script_path.write_text(code, encoding="utf-8")
+                self.logger.info(f"Created temporary script at {script_path}")
 
                 with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
                     result = subprocess.run(
@@ -60,9 +66,16 @@ class RunCodeTool(BaseTool):
                     )
                     stdout_buf.write(result.stdout)
                     stderr_buf.write(result.stderr)
+                    self.logger.info(f"Code execution completed with return code: {result.returncode}")
 
             stdout, stderr = stdout_buf.getvalue(), stderr_buf.getvalue()
+            if stdout:
+                self.logger.info(f"Code execution produced stdout: {stdout[:500]}{'...' if len(stdout) > 500 else ''}")
+            if stderr:
+                self.logger.error(f"Code execution produced stderr: {stderr}")
+
             if not stdout and not stderr:
+                self.logger.info("Code executed successfully with no output")
                 return "Code executed successfully with no output."
 
             out = ""
@@ -72,7 +85,9 @@ class RunCodeTool(BaseTool):
                 out += f"STDERR:\n{stderr}\n"
             return out
         except subprocess.TimeoutExpired:
-            return f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
+            error_msg = f"ERROR: Code execution timed out after {self.max_execution_time} seconds."
+            self.logger.error(error_msg)
+            return error_msg
         except Exception as e:
             tb = traceback.format_exc()
             self.logger.error(f"Error running code: {str(e)}\n{tb}")

@@ -47,6 +47,10 @@ class WriteFileTool(BaseTool):
 
     # --------------------------------------------------
     def _run(self, file_path: str = None, content: str = None) -> str:
+        # Log all parameters when tool is called
+        params_str = ', '.join([f'{k}={v}' for k, v in locals().items() if k != 'self' and k != 'content'])
+        self.logger.info(f"Tool {self.name} called with parameters: {params_str}, content length: {len(content) if content else 0}")
+        
         # Validate parameters
         if file_path is None:
             return "ERROR: Required parameter 'file_path' is missing"

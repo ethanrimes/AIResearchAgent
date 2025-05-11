@@ -48,7 +48,7 @@ def setup_logging(run_dir=None, level=logging.INFO, log_name=None, capture_docke
     # Add file handler if run_dir is provided
     if run_dir:
         # Create logs directory if it doesn't exist
-        log_dir = Path(run_dir) / "logs"
+        log_dir = Path(run_dir) # / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         
         # Create log filename
@@ -57,7 +57,7 @@ def setup_logging(run_dir=None, level=logging.INFO, log_name=None, capture_docke
                 timestamp = get_active_run_timestamp()
             except Exception:
                 timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            log_name = f"experiment_{timestamp}.log"
+            log_name = f"experiment_logs_{timestamp}.log"
         
         # Create file handler
         log_file_path = log_dir / log_name

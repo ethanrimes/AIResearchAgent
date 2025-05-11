@@ -50,6 +50,10 @@ class UpdateFileTool(BaseTool):
 
     # --------------------------------------------------
     def _run(self, file_path: str, old_content: str = None, new_content: str = None) -> str:
+        # Log all parameters when tool is called
+        params_str = f"file_path={file_path}, old_content_length={len(old_content) if old_content else 0}, new_content_length={len(new_content) if new_content else 0}"
+        self.logger.info(f"Tool {self.name} called with parameters: {params_str}")
+        
         # Validate parameters
         if old_content is None:
             return "ERROR: Required parameter 'old_content' is missing"

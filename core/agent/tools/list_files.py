@@ -51,7 +51,11 @@ class ListFilesTool(BaseTool):
 
     # --------------------------------------------------
     def _run(self, directory_path: str = None) -> str:
-    # Validate parameters
+        # Log all parameters when tool is called
+        params_str = ', '.join([f'{k}={v}' for k, v in locals().items() if k != 'self'])
+        self.logger.info(f"Tool {self.name} called with parameters: {params_str}")
+        
+        # Validate parameters
         if directory_path is None:
             return "ERROR: Required parameter 'directory_path' is missing"
         
