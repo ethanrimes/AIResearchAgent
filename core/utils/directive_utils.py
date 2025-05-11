@@ -62,7 +62,7 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
     role = directive_data.get('role', 'You are an AI research assistant')
     task = directive_data.get('task', 'Help conduct research on improving LLM reasoning')
     context = directive_data.get('context', '')
-    constraints = directive_data.get('constraints', '')  # Add constraints field
+    constraints = directive_data.get('constraints', '')
     instructions = directive_data.get('instructions', [])
     output_format = directive_data.get('output_format', '')
     
@@ -73,7 +73,6 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
     if context:
         formatted += f"# Context\n{context}\n\n"
     
-    # Add constraints section if it exists
     if constraints:
         formatted += f"# Constraints\n{constraints}\n\n"
         
@@ -83,13 +82,27 @@ def format_directive(directive_data: Dict[str, Any]) -> str:
     if output_format:
         formatted += f"# Output Format\n{output_format}\n\n"
     
-    # Replace placeholders
-    try:
-        active_run_path = get_active_run_path()
-        formatted = formatted.replace("{ACTIVE_RUN_PATH}", str(active_run_path))
-    except (FileNotFoundError, ValueError) as e:
-        logger.warning(f"Could not replace ACTIVE_RUN_PATH placeholder: {e}")
-        
+    # More comprehensive path replacement
+    path_mappings = {
+        "/app/sandbox/read_only": "/read_only",
+        "{ACTIVE_RUN_PATH}/hypothesis": "/hypothesis",
+        "{ACTIVE_RUN_PATH}/planning": "/planning",
+        "{ACTIVE_RUN_PATH}/experiment": "/experiment",
+        "{ACTIVE_RUN_PATH}/results": "/results",
+        "{ACTIVE_RUN_PATH}/findings": "/findings",
+        "{ACTIVE_RUN_PATH}/scratchpad": "/scratchpad",
+        "{ACTIVE_RUN_PATH}": "/",
+        "/app/sandbox/writable/run_*/hypothesis": "/hypothesis",
+        "/app/sandbox/writable/run_*/planning": "/planning",
+        "/app/sandbox/writable/run_*/experiment": "/experiment",
+        "/app/sandbox/writable/run_*/results": "/results",
+        "/app/sandbox/writable/run_*/findings": "/findings",
+        "/app/sandbox/writable/run_*/scratchpad": "/scratchpad"
+    }
+    
+    for old_path, new_path in path_mappings.items():
+        formatted = formatted.replace(old_path, new_path)
+    
     logger.info(f"Formatted directive with {len(instructions)} instructions")
     return formatted
         

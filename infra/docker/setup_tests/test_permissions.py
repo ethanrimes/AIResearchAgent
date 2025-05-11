@@ -3,7 +3,7 @@ import os
 import pytest
 
 def test_read_only_dir_unwritable():
-    ro = "/app/sandbox/read_only"
+    ro = "/read_only"
     assert os.path.isdir(ro)
     # writing should be forbidden
     fn = os.path.join(ro, "should_fail.txt")
@@ -31,15 +31,10 @@ def test_writable_parent_unwritable():
             f.write("nope")
 
 def test_run_dir_writable():
-    # Get the specific run directory from environment variable
-    run_dir = os.environ.get("EXPERIMENT_RUN_PATH")
-    assert run_dir, "EXPERIMENT_RUN_PATH environment variable not set"
-    assert os.path.isdir(run_dir), f"Run directory {run_dir} does not exist"
-    
-    # Test writing to subdirectories
-    for sub in ("hypothesis", "planning", "experiment", "results", "findings", "scratchpad"):
-        path = os.path.join(run_dir, sub)
-        assert os.path.isdir(path), f"Subdirectory {path} does not exist"
+    # Test writing to root-level directories
+    for sub in ("experiment", "planning", "findings", "results", "hypothesis", "scratchpad"):
+        path = f"/{sub}"
+        assert os.path.isdir(path), f"Directory {path} does not exist"
         
         testfile = os.path.join(path, "perm_test.txt")
         with open(testfile, "w") as f:
@@ -47,6 +42,7 @@ def test_run_dir_writable():
         with open(testfile) as f:
             assert f.read() == "ok"
         os.remove(testfile)
+
 
 def test_no_global_write():
     # Docker runs as non-root, so writing /root or /etc should fail

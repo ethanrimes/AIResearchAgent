@@ -82,25 +82,20 @@ class CritiqueChain:
         self.logger.info("Running experiment code critique")
         
         # ------------------------------------------------------------------
-        # Build output path dynamically from the active run directory
+        # Use direct path to scratchpad directory at root level
         # ------------------------------------------------------------------
-        run_dir = get_active_run_path()
-        output_path = run_dir / "scratchpad" / "critique_results.json"
+        output_path = Path("/scratchpad/critique_results.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Get current experiment code
-        experiment_code = get_current_experiment_code(self.workspace["experiment"])
+        # Get current experiment code using direct path
+        experiment_code = get_current_experiment_code(Path("/experiment"))
         
-        # Find the hypothesis and plan files to read
-        hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
-        plan_file = self.workspace["planning"] / "experiment_plan.json"
+        # Find the hypothesis and plan files to read from root paths
+        hypothesis_file = Path("/hypothesis/hypotheses.json")
+        plan_file = Path("/planning/experiment_plan.json")
         
-        # Read the hypotheses and plan data
-        hypotheses_content = "{}"
-        experiment_plan = "{}"
-        
-        # Get type check results
-        type_check_results = run_pyright_type_check(self.workspace["experiment"])
+        # Get type check results on direct experiment path
+        type_check_results = run_pyright_type_check(Path("/experiment"))
         
         if hypothesis_file.exists():
             try:

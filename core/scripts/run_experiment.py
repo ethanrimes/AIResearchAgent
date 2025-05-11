@@ -47,58 +47,14 @@ def main():
     args = parse_args()
     
     try:
-        # Import your path utility
-        from core.utils.path_utils import get_active_run_path
+        # Set up logging directly with root paths
+        logger = setup_logging(run_dir=Path("/logs"))
         
-        # Use the existing run directory instead of creating a new one
-        if args.run_dir:
-            # If run directory was explicitly specified via args
-            run_dir = Path(args.run_dir)
-            run_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            # Get the run directory that was already created by the entrypoint script
-            try:
-                run_dir = get_active_run_path()
-                # No need to mkdir as it should already exist
-            except FileNotFoundError:
-                # Fallback only if the file doesn't exist (shouldn't happen if entrypoint.sh ran correctly)
-                logger = setup_logging()
-                logger.warning("Active run path file not found, creating a new run directory")
-                run_dir = Path("/app/sandbox/writable") / f"run_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
-                run_dir.mkdir(parents=True, exist_ok=True)
-            
-        # Set up logging using the utility function
-        logger = setup_logging(run_dir=run_dir)
-            
         # Log startup information
         logger.info("Starting AI Research Agent")
         logger.info(f"Using configuration file: {args.config}")
-        logger.info(f"Using run directory: {run_dir}")
+        logger.info("Using flattened directory structure at root level")
         
-        # No need to create active_run_path_file as it should already exist
-        # Just log that we're using it
-        logger.info(f"Using active run path: {run_dir}")
-            
-        # Set up logging using the utility function
-        logger = setup_logging(run_dir=run_dir)
-            
-        # Log startup information
-        logger.info("Starting AI Research Agent")
-        logger.info(f"Using configuration file: {args.config}")
-        logger.info(f"Using run directory: {run_dir}")
-        
-        # Create the active run path file
-        active_run_path_file = Path("/app/active_run_path/path.txt")
-        active_run_path_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(active_run_path_file, 'w') as f:
-            f.write(str(run_dir))
-        logger.info(f"Set active run path to: {run_dir}")
-        
-        # Check if run directory was specified from environment variable
-        run_dir_from_env = os.environ.get("EXPERIMENT_RUN_PATH")
-        if run_dir_from_env:
-            logger.info(f"Using run directory from environment: {run_dir_from_env}")
-            
         # Load configuration from file
         config_path = args.config
         if not Path(config_path).exists():
@@ -109,7 +65,7 @@ def main():
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        # Add this to run_experiment.py after loading config
+        # Set timeout from config if available
         if "max_run_duration" in config:
             logger.info(f"Using timeout from config: {config['max_run_duration']}s")
             os.environ["EXPERIMENT_TIMEOUT"] = str(config["max_run_duration"])
@@ -136,18 +92,35 @@ def main():
             os.environ["OLLAMA_BASE_URL"] = "http://host.docker.internal:11434"
             logger.info(f"Set default OLLAMA_BASE_URL: {os.environ['OLLAMA_BASE_URL']}")
         
+        # Update workspace paths to use flattened directory structure
+        logger.info("Configuring workspace with flattened directory structure")
+        config['workspace'] = {
+            'experiment': '/experiment',
+            'findings': '/findings',
+            'hypothesis': '/hypothesis',
+            'planning': '/planning',
+            'results': '/results',
+            'read_only': '/read_only',
+            'logs': '/logs',
+            'scratchpad': '/scratchpad',
+            'writable': '/logs'  # Use logs directory for writable files like run_summary.json
+        }
+        logger.info("Workspace paths configured for flattened structure")
+
         # Write modified config back to a temporary file
         temp_config_path = Path("/tmp/modified_config.yaml")
         with open(temp_config_path, 'w') as f:
             yaml.dump(config, f)
             
         # Initialize the agent with the modified configuration
+        logger.info("Initializing AI Research Agent")
         agent = Agent(str(temp_config_path))
         
         # Run the agent
+        logger.info("Starting agent execution")
         results = agent.run()
         
-        # Rest of the function remains the same
+        # Process results
         if results["status"] == "success":
             logger.info(f"Agent run completed successfully in {results['elapsed_time']:.2f} seconds")
             logger.info(f"Results available in: {agent.workspace['findings']}")
@@ -156,8 +129,8 @@ def main():
         else:
             logger.error(f"Agent run failed with error: {results['error']}")
             
-        # Write the final results to a JSON file
-        run_summary_file = Path(agent.workspace["writable"]) / "run_summary.json"
+        # Write the final results to a JSON file in the /results directory
+        run_summary_file = Path("/results/run_summary.json")
         with open(run_summary_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2)
         logger.info(f"Run summary written to: {run_summary_file}")
@@ -168,7 +141,7 @@ def main():
     except Exception as e:
         # If an exception occurs before logging is set up, set it up now
         if not logging.getLogger().handlers:
-            logger = setup_logging()
+            logger = setup_logging(run_dir=Path("/logs"))
         logger.exception(f"Unhandled exception: {e}")
         return 1
 

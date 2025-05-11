@@ -13,31 +13,40 @@ print(config.get('max_run_duration', 600))
 export EXPERIMENT_TIMEOUT="${CONFIG_TIMEOUT}"
 echo "Using timeout from config: ${EXPERIMENT_TIMEOUT}s"
 
-
 # Generate timestamped run directory
 timestamp=$(date +"%Y-%m-%dT%H-%M-%S")
 run_dir="sandbox/writable/run_$timestamp"
 
-# Create the run directory on the host
+# Create the run directory and subdirectories on the host
 mkdir -p "$run_dir"
-echo "Created run directory: $run_dir"
+mkdir -p "$run_dir/experiment"
+mkdir -p "$run_dir/findings"
+mkdir -p "$run_dir/hypothesis"
+mkdir -p "$run_dir/planning"
+mkdir -p "$run_dir/results"
+mkdir -p "$run_dir/logs"
+mkdir -p "$run_dir/scratchpad"
+echo "Created run directory: $run_dir with all required subdirectories"
 
 # Copy pyright configuration to experiment directory
 cp core/config/package_config/pyrightconfig.json "$run_dir/pyrightconfig.json"
 
-# Set permissions if needed
-chmod 777 "$run_dir"
+# Set permissions
+chmod -R 777 "$run_dir"
 
-# Set these variables for use throughout the script
-EXPERIMENT_RUN_PATH="/app/sandbox/writable/run_$timestamp"
+# We only need HOST_RUN_DIR for docker-compose
 HOST_RUN_DIR="$(pwd)/$run_dir"
 
-# Export them for docker-compose
-export EXPERIMENT_RUN_PATH
+# Export for docker-compose
 export HOST_RUN_DIR
 
 echo "Starting container with run directory: $HOST_RUN_DIR"
-echo "Container path: $EXPERIMENT_RUN_PATH"
+echo "Container paths:"
+echo "  - /experiment"
+echo "  - /findings"
+echo "  - /hypothesis"
+echo "  - /planning"
+echo "  - /results"
 
 # Check if build argument is passed
 BUILD_FLAG=""
@@ -67,7 +76,6 @@ fi
 function cleanup {
   echo "Cleaning up containers..."
   # Make sure to re-export the variables within the function
-  export EXPERIMENT_RUN_PATH="$EXPERIMENT_RUN_PATH"
   export HOST_RUN_DIR="$HOST_RUN_DIR"
   docker compose --env-file .env -f infra/docker-compose.yml down
   echo "Containers removed."

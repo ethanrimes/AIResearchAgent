@@ -110,37 +110,32 @@ class Agent:
         Returns:
             Dict containing paths to workspace directories.
         """
-        # Base paths
-        base_dir = Path("/app")
-        read_only_dir = base_dir / "sandbox" / "read_only"
-        
-        # Get the active run path
-        try:
-            from core.utils.path_utils import get_active_run_path
-            writable_dir = get_active_run_path()
-        except (FileNotFoundError, ValueError) as e:
-            self.logger.warning(f"Could not get active run path: {e}")
-            # Fallback to the old behavior
-            writable_dir = base_dir / "sandbox" / "writable" / f"run_{self.run_id}"
-        
-        # Ensure writable directories exist
-        for subdir in ["hypothesis", "planning", "experiment", "results", "findings", "scratchpad"]:
-            (writable_dir / subdir).mkdir(exist_ok=True, parents=True)
-        
+        # Set up workspace using direct root paths
         workspace = {
-            "base_dir": base_dir,
-            "read_only": read_only_dir,
-            "writable": writable_dir,
-            "hypothesis": writable_dir / "hypothesis",
-            "planning": writable_dir / "planning",
-            "experiment": writable_dir / "experiment",
-            "results": writable_dir / "results",
-            "findings": writable_dir / "findings",
-            "scratchpad": writable_dir / "scratchpad",
+            "base_dir": Path("/app"),
+            "read_only": Path("/read_only"),
+            "writable": Path("/"),  # Root as the writable area
+            "hypothesis": Path("/hypothesis"),
+            "planning": Path("/planning"),
+            "experiment": Path("/experiment"),
+            "results": Path("/results"),
+            "findings": Path("/findings"),
+            "scratchpad": Path("/scratchpad"),
             "dataset": Path(self.config["dataset_path"])
         }
         
-        self.logger.info(f"Workspace set up at {writable_dir}")
+        # Ensure writable directories exist
+        for dir_path in [
+            workspace["hypothesis"], 
+            workspace["planning"], 
+            workspace["experiment"], 
+            workspace["results"], 
+            workspace["findings"], 
+            workspace["scratchpad"]
+        ]:
+            dir_path.mkdir(exist_ok=True, parents=True)
+        
+        self.logger.info("Workspace set up with flattened directory structure")
         return workspace
         
     def _init_llm(self) -> ChatOpenAI:

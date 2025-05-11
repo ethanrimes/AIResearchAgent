@@ -5,7 +5,7 @@ services:
       dockerfile: infra/docker/Dockerfile
     container_name: ai-research-agent
     logging:
-      driver: "local"  # More efficient than json-file
+      driver: "local"
       options:
         max-size: "10m"
         max-file: "3"
@@ -19,21 +19,29 @@ services:
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - EXPERIMENT_TIMEOUT=${EXPERIMENT_TIMEOUT}
-      - EXPERIMENT_RUN_PATH=${EXPERIMENT_RUN_PATH}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - EXPERIMENT_TIMEOUT=${EXPERIMENT_TIMEOUT:-600}
+      # - EXPERIMENT_RUN_PATH=${EXPERIMENT_RUN_PATH}
     volumes:
-      # Mount core code as read-only
+      # Core code and data remain the same
       - ../core:/app/core:ro
-      # Mount data directory as read-only
       - ../data:/app/data:ro
       - ../data:/data:ro
-      # Mount read_only directory with read-only permissions
-      - ../sandbox/read_only:/app/sandbox/read_only:ro
-      # Mount writable directories with read-only permissions by default
-      # - ../sandbox/writable:/app/sandbox/writable:ro
-      # Mount the specific run directory with read-write permissions
-      - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
+      
+      # Mount read_only directory at the root level
+      - ../sandbox/read_only:/read_only:ro
+      
+      # Mount experiment directories directly at root
+      - ${HOST_RUN_DIR}/experiment:/experiment:rw
+      - ${HOST_RUN_DIR}/findings:/findings:rw
+      - ${HOST_RUN_DIR}/hypothesis:/hypothesis:rw
+      - ${HOST_RUN_DIR}/planning:/planning:rw
+      - ${HOST_RUN_DIR}/results:/results:rw
+      - ${HOST_RUN_DIR}/logs:/logs:rw
+      - ${HOST_RUN_DIR}/scratchpad:/scratchpad:rw
+      
+      # Keep this for compatibility with existing scripts
+      # - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
     read_only: true
     tmpfs:
       - /tmp
@@ -48,13 +56,11 @@ services:
       - openai-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Add this line:
     restart: "no"
-    # This is the correct way to auto-remove in docker-compose:
     init: true
-    command: ["sh", "-c", "trap 'exit 0' SIGTERM; /app/infra/docker/entrypoint.sh; exit 0"]
+    # Using the entrypoint directly (no need for the trap command)
+    entrypoint: ["/app/infra/docker/entrypoint.sh"]
 
-# Define networks at the top level
 networks:
   openai-network:
     driver: bridge

@@ -32,49 +32,55 @@ fi
 # Log the final value
 echo "Final OLLAMA_DEFAULT_MODEL being used: ${OLLAMA_DEFAULT_MODEL:-not set}"
 
-: "${EXPERIMENT_RUN_PATH:=/app/sandbox/writable/run_default}"
-
-echo "Experiment run directory: $EXPERIMENT_RUN_PATH"
-echo "$EXPERIMENT_RUN_PATH" > /app/active_run_path/path.txt
-
+echo "Using flattened directory structure at root level"
 echo "Starting AI Research Agent with experiment timeout: ${EXPERIMENT_TIMEOUT}s"
 echo "Using OpenAI API for agent"
 echo "Using Ollama for local inference via host.docker.internal"
 
+# Set up log files
+LOG_DIR="/logs"
+CONTAINER_LOG="${LOG_DIR}/container.log"
+FILE_STRUCTURE_LOG="${LOG_DIR}/file_structure.log"
 
+# Ensure log directory exists and is writable
+if [[ ! -d "$LOG_DIR" ]]; then
+    echo "Creating log directory ${LOG_DIR}..."
+    mkdir -p "$LOG_DIR" || { echo "❌ Failed to create ${LOG_DIR}"; exit 1; }
+fi
+
+if [[ ! -w "$LOG_DIR" ]]; then
+    echo "❌ Cannot write to ${LOG_DIR}"; exit 1
+else
+    echo "✓ Write access to ${LOG_DIR} confirmed"
+fi
+
+# Redirect output to log file and console
+exec > >(tee -a "$CONTAINER_LOG") 2>&1
+echo "Logging container output to $CONTAINER_LOG"
 
 # -------------------------------------------------
 # 1.  Filesystem-permission checks
 # -------------------------------------------------
 echo "Checking filesystem permissions..."
 
-readonly_ro="/app/sandbox/read_only"
+readonly_ro="/read_only"
 readonly_data="/app/data"
-readonly_parent="/app/sandbox/writable"
 
 if [[ ! -r "$readonly_ro" ]];   then echo "❌ Cannot read $readonly_ro";   exit 1; else echo "✓ Read access to $readonly_ro confirmed"; fi
 if [[ ! -r "$readonly_data" ]]; then echo "❌ Cannot read $readonly_data"; exit 1; else echo "✓ Read access to $readonly_data confirmed"; fi
 
-# Create run sub-dirs (the bind mount itself must already exist)
-mkdir -p "${EXPERIMENT_RUN_PATH}"/{hypothesis,planning,experiment,results,findings,scratchpad,logs}
-touch "${EXPERIMENT_RUN_PATH}"/experiment/run_experiment.sh
-
 # Set up Pyright cache directory
-export PYRIGHT_PYTHON_CACHE_DIR="${EXPERIMENT_RUN_PATH}/scratchpad"
+export PYRIGHT_PYTHON_CACHE_DIR="/scratchpad"
 echo "✓ Pyright cache directory set to: ${PYRIGHT_PYTHON_CACHE_DIR}"
 
-if [[ ! -w "$EXPERIMENT_RUN_PATH" ]]; then
-  echo "❌ Cannot write to $EXPERIMENT_RUN_PATH"; exit 1
-else
-  echo "✓ Write access to $EXPERIMENT_RUN_PATH confirmed"
-fi
-
-# We must NOT be able to write to the parent writable dir
-if touch "${readonly_parent}/should_not_write.txt" 2>/dev/null; then
-  echo "❌ Unexpected write access to $readonly_parent"; rm -f "${readonly_parent}/should_not_write.txt"; exit 1
-else
-  echo "✓ Confirmed $readonly_parent is read-only as expected"
-fi
+# Check permissions on mounted directories
+for dir in experiment findings hypothesis planning results logs scratchpad; do
+  if [[ ! -w "/$dir" ]]; then
+    echo "❌ Cannot write to /$dir"; exit 1
+  else
+    echo "✓ Write access to /$dir confirmed"
+  fi
+done
 
 # -------------------------------------------------
 # 2.  Network-connectivity smoke tests
@@ -91,43 +97,55 @@ if curl -s --max-time 5 "${OLLAMA_BASE_URL%/}/api/tags" >/dev/null; then
 else
   echo "⚠️  Cannot connect to Ollama at ${OLLAMA_BASE_URL}"; fi
 
-# Add this after your permissions check section and before running tests
-
 # -------------------------------------------------
 # 2.5. Log file structure for debugging
 # -------------------------------------------------
-echo "Logging file structure for debugging..."
-echo "Contents of /app directory:"
-find /app -type f -name "*.py" | sort > "${EXPERIMENT_RUN_PATH}/file_structure.log"
+echo "Logging complete file structure for debugging..."
 
-# Log Python paths
-echo -e "\nPython Path:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
-python -c "import sys; print('\n'.join(sys.path))" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+# First clean previous logs if they exist
+> "$FILE_STRUCTURE_LOG"
 
-# Check if the specific file exists
-echo -e "\nSearching for rstar_data_loader.py:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
-find /app -name "rstar_data_loader.py" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+# Log container ID and hostname
+echo "Container ID: $(hostname)" > "$FILE_STRUCTURE_LOG"
+echo "Current timestamp: $(date -Is)" >> "$FILE_STRUCTURE_LOG"
 
-# Print content of directories
-echo -e "\nContents of sandbox directory:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
-ls -la /app/sandbox >> "${EXPERIMENT_RUN_PATH}/file_structure.log" 2>&1
+# Log environment variables (redacting sensitive values)
+echo -e "\n--- Environment Variables ---" >> "$FILE_STRUCTURE_LOG"
+env | grep -v "_KEY\|PASSWORD\|TOKEN" | sort >> "$FILE_STRUCTURE_LOG"
 
-echo -e "\nContents of sandbox/read_only directory:" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
-ls -la /app/sandbox/read_only >> "${EXPERIMENT_RUN_PATH}/file_structure.log" 2>&1
+# Log mounted volumes
+echo -e "\n--- Mounted Volumes ---" >> "$FILE_STRUCTURE_LOG"
+mount | grep -E "/experiment|/findings|/hypothesis|/planning|/results|/logs|/scratchpad|/read_only|/app" >> "$FILE_STRUCTURE_LOG"
 
-echo -e "\nContents of sandbox/read_only/dataloader directory (if exists):" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
-ls -la /app/sandbox/read_only/dataloader >> "${EXPERIMENT_RUN_PATH}/file_structure.log" 2>&1 || echo "Directory not found" >> "${EXPERIMENT_RUN_PATH}/file_structure.log"
+# Log directory structure
+echo -e "\n--- Root Directory Structure ---" >> "$FILE_STRUCTURE_LOG"
+ls -la / >> "$FILE_STRUCTURE_LOG" 2>&1
 
-echo "✓ File structure logged to ${EXPERIMENT_RUN_PATH}/file_structure.log"
+# Log App directory structure - recursively but not too deeply
+echo -e "\n--- App Directory Structure ---" >> "$FILE_STRUCTURE_LOG"
+find /app -type d -maxdepth 3 | sort >> "$FILE_STRUCTURE_LOG"
 
-# Tee logs to host
-mkdir -p "${EXPERIMENT_RUN_PATH}/logs"
-LOG_FILE="${EXPERIMENT_RUN_PATH}/logs/container.log"
+# Log Python files specifically
+echo -e "\n--- Python Files ---" >> "$FILE_STRUCTURE_LOG"
+find /app -type f -name "*.py" | sort >> "$FILE_STRUCTURE_LOG"
 
-# Use exec with tee to capture all output
-exec > >(tee -a "$LOG_FILE") 2>&1
+# Log Python path
+echo -e "\n--- Python Path ---" >> "$FILE_STRUCTURE_LOG"
+python -c "import sys; print('\n'.join(sys.path))" >> "$FILE_STRUCTURE_LOG"
 
-echo "Logging container output to $LOG_FILE"
+# Log key directories content
+for dir in /app/core /app/infra /experiment /findings /hypothesis /planning /results /logs /scratchpad /read_only; do
+  if [ -d "$dir" ]; then
+    echo -e "\n--- Contents of $dir directory ---" >> "$FILE_STRUCTURE_LOG"
+    ls -la "$dir" >> "$FILE_STRUCTURE_LOG" 2>&1
+  fi
+done
+
+# Log disk space
+echo -e "\n--- Disk Space ---" >> "$FILE_STRUCTURE_LOG"
+df -h >> "$FILE_STRUCTURE_LOG"
+
+echo "✓ Complete file structure logged to $FILE_STRUCTURE_LOG"
 
 # -------------------------------------------------
 # 3.  Run the infra "setup tests" suite (pytest)
@@ -137,11 +155,11 @@ echo "Running container setup tests with pytest..."
 echo "✓ pytest setup tests passed"
 
 # -------------------------------------------------
-# 4.  Persist a proof-of-write file in the run dir
+# 4.  Persist a proof-of-write file
 # -------------------------------------------------
-echo "Verifying writable run directory by leaving a test artefact..."
-echo "hello-from-entrypoint $(date -Is)" > "${EXPERIMENT_RUN_PATH}/entrypoint_write_test.txt"
-echo "✓ File written to ${EXPERIMENT_RUN_PATH}/entrypoint_write_test.txt"
+echo "Verifying writable directories by leaving a test artefact..."
+echo "hello-from-entrypoint $(date -Is)" > "/logs/entrypoint_write_test.txt"
+echo "✓ File written to /logs/entrypoint_write_test.txt"
 
 # -------------------------------------------------
 # 5.  (Optional) start the main experiment
@@ -151,6 +169,3 @@ timeout "${EXPERIMENT_TIMEOUT}" python /app/core/scripts/run_experiment.py
 
 # Keep the container alive if no experiment is launched
 echo "Container initialisation finished."
-
-
-

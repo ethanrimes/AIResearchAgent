@@ -48,6 +48,8 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
     """
     Validates the experiment output files and directories.
     
+    Works with both legacy path structure and flattened structure.
+    
     Args:
         experiment_dir: Path to the experiment directory.
         results_dir: Path to the results directory.
@@ -59,6 +61,14 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
     """
     logger = logging.getLogger("ai_research_agent.experiment_utils")
     
+    # Always normalize paths to account for either structure
+    if not str(experiment_dir).startswith("/experiment") and Path("/experiment").exists():
+        experiment_dir = Path("/experiment")
+    
+    if not str(results_dir).startswith("/results") and Path("/results").exists():
+        results_dir = Path("/results")
+        
+    # Continue with the existing validation logic using normalized paths
     validation_results = {
         "entry_script_exists": False,
         "python_files_exist": False,

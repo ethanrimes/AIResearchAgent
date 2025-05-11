@@ -5,14 +5,22 @@ import logging
 
 def get_active_run_path():
     """
-    Get the active run path from /app/active_run_path/path.txt.
-
+    Get the active run path.
+    
+    In the flattened directory structure, this returns the root path.
+    Legacy code may still call this function, so we maintain it.
+    
     Returns:
-        Path object representing the active run path.
+        Path object representing the root path.
     """
-    from pathlib import Path
-
     logger = logging.getLogger("ai_research_agent.path_utils")
+    
+    # Check if we're using the flattened structure
+    if Path("/experiment").exists() and Path("/findings").exists():
+        logger.info("Using flattened directory structure with root paths")
+        return Path("/")
+    
+    # Fall back to the legacy path file method
     active_run_path_file = Path("/app/active_run_path/path.txt")
 
     if not active_run_path_file.exists():

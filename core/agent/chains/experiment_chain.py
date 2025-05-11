@@ -66,11 +66,11 @@ class ExperimentChain:
         self.active_run_path = str(workspace["writable"])
         self.critique_chain = critique_chain  # Store the critique chain
 
-        # Short-hand directories
-        self.exp_dir = workspace["experiment"]
-        self.results_dir = workspace["results"]
+        # Short-hand directories using root paths
+        self.exp_dir = Path("/experiment")
+        self.results_dir = Path("/results")
         self.entry_script_path = self.exp_dir / self.ENTRY_SCRIPT
-        self.scratchpad_file = workspace["scratchpad"] / "experiment_notes.txt"
+        self.scratchpad_file = Path("/scratchpad/experiment_notes.txt")
 
         self.logger = logging.getLogger("ai_research_agent.experiment_chain")
 
@@ -106,38 +106,38 @@ class ExperimentChain:
         """Create tool instances and keep a reference to RunBash for later."""
         read_tool = ReadFileTool(
             allowed_dirs=[
-                str(self.workspace["read_only"]),
-                str(self.workspace["hypothesis"]),
-                str(self.workspace["planning"]),
-                str(self.workspace["experiment"]),
+                "/read_only",
+                "/hypothesis",
+                "/planning",
+                "/experiment",
             ]
         )
 
         # Write, Update, and Delete tools only have access to experiment directory
         write_tool = WriteFileTool(
-            allowed_dirs=[str(self.exp_dir)]
+            allowed_dirs=["/experiment"]
         )
         
         update_tool = UpdateFileTool(
-            allowed_dirs=[str(self.exp_dir)]
+            allowed_dirs=["/experiment"]
         )
         
         delete_tool = DeleteFileTool(
-            allowed_dirs=[str(self.exp_dir)]
+            allowed_dirs=["/experiment"]
         )
         
         # List Files has access to read-only and experiment directories
         list_files_tool = ListFilesTool(
             allowed_dirs=[
-                str(self.workspace["read_only"]),
-                str(self.workspace["hypothesis"]),
-                str(self.workspace["planning"]),
-                str(self.workspace["experiment"]),
+                "/read_only",
+                "/hypothesis",
+                "/planning",
+                "/experiment",
             ]
         )
 
         self.run_bash_tool = RunBashTool(
-            working_dir=str(self.exp_dir), output_dir=str(self.results_dir)
+            working_dir="/experiment", output_dir="/results"
         )
 
         run_code_tool = RunCodeTool()
@@ -148,7 +148,7 @@ class ExperimentChain:
             update_tool,
             delete_tool,
             list_files_tool,
-            self.run_bash_tool,  # keep reference
+            self.run_bash_tool,
             run_code_tool,
         ]
 
@@ -208,7 +208,7 @@ class ExperimentChain:
         plan_file = self.workspace["planning"] / "experiment_plan.json"
         results_json = self.results_dir / "results_summary.json"
         hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
-        api_doc_file = Path("/app/sandbox/read_only/api.md")
+        api_doc_file = Path("/read_only/api.md")
 
         # Track the state of validation
         validation_passed = False

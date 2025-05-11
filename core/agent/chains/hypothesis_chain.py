@@ -77,10 +77,9 @@ class HypothesisChain:
         self.logger.info("Running hypothesis generation")
         
         # ------------------------------------------------------------------
-        # Build output path dynamically from the active run directory
+        # Use direct path to hypothesis directory at root level
         # ------------------------------------------------------------------
-        run_dir = get_active_run_path()
-        output_path = run_dir / "hypothesis" / "hypotheses.json"
+        output_path = Path("/hypothesis/hypotheses.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # ------------------------------------------------------------------

@@ -81,14 +81,13 @@ class PlannerChain:
         self.logger.info("Running experiment planning")
         
         # ------------------------------------------------------------------
-        # Build output path dynamically from the active run directory
+        # Use direct path to planning directory at root level
         # ------------------------------------------------------------------
-        run_dir = get_active_run_path()
-        output_path = run_dir / "planning" / "experiment_plan.json"
+        output_path = Path("/planning/experiment_plan.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Find the hypothesis file path to read from
-        hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
+        hypothesis_file = Path("/hypothesis/hypotheses.json")
         
         # Read the hypotheses data directly
         hypotheses_content = json.dumps(hypothesis_data, indent=2)

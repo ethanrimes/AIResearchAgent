@@ -85,16 +85,15 @@ class EvaluatorChain:
         self.logger.info("Running result evaluation and generating findings")
         
         # ------------------------------------------------------------------
-        # Build output path dynamically from the active run directory
+        # Use direct path to findings directory at root level
         # ------------------------------------------------------------------
-        run_dir = get_active_run_path()
-        output_path = run_dir / "findings" / "final_findings.json"
+        output_path = Path("/findings/final_findings.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Find file paths and read their contents
-        hypothesis_file = self.workspace["hypothesis"] / "hypotheses.json"
-        plan_file = self.workspace["planning"] / "experiment_plan.json"
-        results_file = self.workspace["results"] / "results_summary.json"
+        # Find file paths and read their contents using direct root paths
+        hypothesis_file = Path("/hypothesis/hypotheses.json")
+        plan_file = Path("/planning/experiment_plan.json")
+        results_file = Path("/results/results_summary.json")
         
         # Read all the necessary files
         try:

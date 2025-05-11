@@ -18,18 +18,18 @@ context: |
 
 constraints: |
   - You have access to the following tools:
-    - read_file: Read files from /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning, and {ACTIVE_RUN_PATH}/experiment
-    - write_file: Create or overwrite files in {ACTIVE_RUN_PATH}/experiment only
-    - update_file: Make partial modifications to existing files in {ACTIVE_RUN_PATH}/experiment only
-    - delete_file: Remove files from {ACTIVE_RUN_PATH}/experiment only
-    - list_files: View directory contents in /app/sandbox/read_only, {ACTIVE_RUN_PATH}/hypothesis, {ACTIVE_RUN_PATH}/planning, and {ACTIVE_RUN_PATH}/experiment
-    - run_bash: Execute bash commands in {ACTIVE_RUN_PATH}/experiment. Results may only be written to {ACTIVE_RUN_PATH}/results
+    - read_file: Read files from /read_only, /hypothesis, /planning, and /experiment
+    - write_file: Create or overwrite files in /experiment only
+    - update_file: Make partial modifications to existing files in /experiment only
+    - delete_file: Remove files from /experiment only
+    - list_files: View directory contents in /read_only, /hypothesis, /planning, and /experiment
+    - run_bash: Execute bash commands in /experiment. Results may only be written to /results
     - run_code: Execute small Python code snippets for testing
   - Do not access any other directories outside of these permissions.
 
 instructions: |
-  - Read the hypotheses from {ACTIVE_RUN_PATH}/hypothesis and the experiment plan from {ACTIVE_RUN_PATH}/planning.
-  - Implement an experiment to test the hypotheses according to the plan in planning, writing all code to the {ACTIVE_RUN_PATH}/experiment directory.
+  - Read the hypotheses from /hypothesis and the experiment plan from /planning.
+  - Implement an experiment to test the hypotheses according to the plan in planning, writing all code to the /experiment directory.
   - Determine the directory structure of this experiment before you write any code
   - The experiment must:
     - Use the specified bash script as an entry point
@@ -40,14 +40,14 @@ instructions: |
     - **dataloader/rstar_data_loader.py**: This loads the target dataset. The dataset path is defined in this module and cannot be changed.
     - **evaluator/answer_evaluation.py**: This extract final answers and evaluates their correctness.
     - **models/ollama_client.py**: This is the interface with which to interact with the locally hosted LLM server, which you will use to run your inference/test time compute experiments.
-  - Write the executable for this experiment at {ACTIVE_RUN_PATH}/experiment/run_experiment.sh
+  - Write the executable for this experiment at /experiment/run_experiment.sh
   - Iteratively refine your code, testing the entry point with the RunCodeTool. Do not leave until you have obtained satisfactory results from the experiment.
   - Write modular code: define one function per hypothesis and one for the baseline.
   - Use logging and error handling to make the experiment repeatable and debuggable.
-  - Run the full experiment and write the results (including correctness, reasoning trace, and timing) to a JSON file in {ACTIVE_RUN_PATH}/results.
-  - You may consult example code at /app/sandbox/read_only/example for structure or inspiration, but do not copy code directly.
+  - Run the full experiment and write the results (including correctness, reasoning trace, and timing) to a JSON file in /results.
+  - You may consult example code at /read_only/example for structure or inspiration, but do not copy code directly.
   
-  - The final statistics your code generates should output to {ACTIVE_RUN_PATH}/results/result_summary.json the following schema:
+  - The final statistics your code generates should output to /results/result_summary.json the following schema:
   ```json
   {{
     "experiment_results": {{
