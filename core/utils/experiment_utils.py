@@ -26,7 +26,7 @@ def get_current_experiment_code(experiment_dir: Path) -> str:
         logger.warning(f"Experiment directory does not exist: {experiment_dir}")
         return "No experiment code found."
     
-    code_files = list(experiment_dir.glob("*.*"))
+    code_files = list(experiment_dir.glob("**/*.py"))
     if not code_files:
         logger.info("No files found in experiment directory.")
         return "No files found in experiment directory."
@@ -44,7 +44,7 @@ def get_current_experiment_code(experiment_dir: Path) -> str:
     
     return "\n".join(result)
 
-def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_script_name: str = "run_experiment.sh") -> Dict[str, Any]:
+def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_script_name: str = "run_experiment.sh", run_bash_tool=None) -> Dict[str, Any]:
     """
     Validates the experiment output files and directories.
     
@@ -52,6 +52,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         experiment_dir: Path to the experiment directory.
         results_dir: Path to the results directory.
         entry_script_name: Name of the entry script file.
+        run_bash_tool: Optional RunBashTool to execute the entry script.
         
     Returns:
         Dict containing validation results and errors if any.
@@ -62,26 +63,43 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         "entry_script_exists": False,
         "python_files_exist": False,
         "results_file_exists": False,
+        "bash_output": "",
         "errors": []
     }
     
-    # Check 1: Entry script exists and is not empty
+    # STEP 1: Check that entry script exists and is not empty
     entry_script_path = experiment_dir / entry_script_name
     if not entry_script_path.exists():
         validation_results["errors"].append(f"Entry script does not exist: {entry_script_name}")
+        return validation_results
     elif entry_script_path.stat().st_size == 0:
         validation_results["errors"].append(f"Entry script is empty: {entry_script_name}")
+        return validation_results
     else:
         validation_results["entry_script_exists"] = True
     
-    # Check 2: Python files exist in experiment directory
+    # STEP 2: Check that Python files exist in experiment directory
     python_files = list(experiment_dir.glob("*.py"))
     if not python_files:
         validation_results["errors"].append("No Python files found in the experiment directory")
+        return validation_results
     else:
         validation_results["python_files_exist"] = True
     
-    # Check 3: Results file exists
+    # STEP 3: If we have both entry script and Python files, and run_bash_tool is provided, execute the script
+    if run_bash_tool and validation_results["entry_script_exists"] and validation_results["python_files_exist"]:
+        try:
+            logger.info(f"Executing bash script: {entry_script_path}")
+            bash_output = run_bash_tool._run(f"bash {entry_script_path}")
+            validation_results["bash_output"] = bash_output
+            logger.info(f"Bash script execution completed")
+        except Exception as e:
+            error_msg = f"Error executing bash script: {str(e)}"
+            logger.error(error_msg)
+            validation_results["errors"].append(error_msg)
+            return validation_results
+    
+    # STEP 4: After executing the script, check if results_summary.json exists
     results_file_path = results_dir / "results_summary.json"
     if not results_file_path.exists():
         validation_results["errors"].append("Results summary file does not exist: results_summary.json")
@@ -90,6 +108,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
     
     logger.info(f"Validation results: {validation_results}")
     return validation_results
+
 
 def update_memory_with_steps(memory, steps_in_memory, agent_output):
     """

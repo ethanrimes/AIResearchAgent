@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import logging
 from typing import Dict, List, Any, Optional, Union, Generator
@@ -80,6 +81,48 @@ class GenerationParameters:
 
 
 # ---------------------------------------------------------
+#  Logging Configuration
+# ---------------------------------------------------------
+def setup_module_logger(logger_name: str) -> logging.Logger:
+    """
+    Set up a module-specific logger with appropriate handlers.
+    
+    Args:
+        logger_name: The name for the logger
+        
+    Returns:
+        Configured logger instance
+    """
+    logger = logging.getLogger(logger_name)
+    
+    # Only configure if the logger doesn't already have handlers
+    if not logger.handlers:
+        # Set the log level
+        logger.setLevel(logging.INFO)
+        
+        # Create console handler that logs to stdout
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        console_handler.setFormatter(formatter)
+        
+        # Add the handler to the logger
+        logger.addHandler(console_handler)
+        
+        # Prevent propagation to root logger to avoid duplicate messages
+        logger.propagate = False
+        
+        logger.debug(f"Logger {logger_name} has been configured")
+    
+    return logger
+
+
+# ---------------------------------------------------------
 #  Main Client
 # ---------------------------------------------------------
 class OllamaClient:
@@ -105,8 +148,10 @@ class OllamaClient:
                             "OLLAMA_DEFAULT_MODEL environment variable.")
         object.__setattr__(self, "_session", requests.Session())
         
-        # Create logger before freezing the object
-        object.__setattr__(self, "logger", logging.getLogger("ai_research_agent.ollama_client"))
+        # Configure module-specific logger
+        logger_name = "ai_research_agent.ollama_client"
+        object.__setattr__(self, "logger", setup_module_logger(logger_name))
+        self.logger.info(f"Initializing OllamaClient with base URL: {self._base_url}, model: {self._default_model}")
 
         # immediately verify connectivity
         self._check_connection()
@@ -142,6 +187,7 @@ class OllamaClient:
             r.raise_for_status()
             self.logger.info("Connected to Ollama server at %s", self._base_url)
         except requests.RequestException as exc:
+            self.logger.error(f"Failed to connect to Ollama server: {exc}")
             raise ConnectionError(f"Unable to connect to Ollama at {self._base_url}") from exc
 
     def _enforce_defaults(self, params: Union[GenerationParameters, Dict[str, Any]]) -> Dict[str, Any]:
@@ -157,6 +203,7 @@ class OllamaClient:
 
     def _make_request(self, endpoint: str, data: Dict[str, Any], *, stream: bool = False, timeout: Optional[float] = None) -> Union[requests.Response, Dict[str, Any]]:
         url = self._get_url(endpoint)
+        self.logger.debug(f"Making request to {url} with stream={stream}")
 
         # Double-check stream setting between function param and data to ensure consistency
         if "stream" in data:
@@ -165,6 +212,7 @@ class OllamaClient:
             is_streaming = stream
 
         if is_streaming:
+            self.logger.debug("Using streaming mode for request")
             return self._session.post(url, json=data, stream=True, timeout=timeout)
         
         # Explicitly ensure stream is set to False in data for non-streaming requests
@@ -172,14 +220,21 @@ class OllamaClient:
         data_copy["stream"] = False
         
         # For non-streaming requests, use requests.post directly with the URL
+        self.logger.debug("Making non-streaming request")
         resp = requests.post(url, json=data_copy, timeout=timeout)
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            self.logger.error(f"Request failed: {exc}")
+            raise
         
         if not resp.content:
+            self.logger.warning("Received empty response")
             return resp
 
         # Handle different response formats based on content type
         content_type = resp.headers.get('Content-Type', '')
+        self.logger.debug(f"Response content type: {content_type}")
         
         # If we're getting ndjson even though we requested non-streaming
         if 'application/x-ndjson' in content_type:
@@ -187,6 +242,7 @@ class OllamaClient:
             try:
                 lines = resp.text.strip().split("\n")
                 if not lines:
+                    self.logger.warning("No lines in NDJSON response")
                     return {"response": ""}
                 
                 # Extract and concatenate all responses
@@ -197,6 +253,7 @@ class OllamaClient:
                         if "response" in chunk:
                             full_response += chunk["response"]
                     except json.JSONDecodeError:
+                        self.logger.warning(f"Failed to parse JSON line: {line[:50]}...")
                         continue
                 
                 # Get metadata from the last chunk if possible
@@ -205,6 +262,7 @@ class OllamaClient:
                     result = {**last_chunk, "response": full_response}
                     return result
                 except (json.JSONDecodeError, IndexError):
+                    self.logger.warning("Failed to parse last chunk of NDJSON response")
                     return {"response": full_response}
             except Exception as e:
                 self.logger.error(f"Error processing NDJSON response: {e}")
@@ -214,6 +272,7 @@ class OllamaClient:
         try:
             return resp.json()
         except json.JSONDecodeError:
+            self.logger.warning("Failed to parse JSON response, returning raw text")
             return {"response": resp.text}
 
     # ---------- public API ----------
@@ -231,6 +290,7 @@ class OllamaClient:
             Response dictionary containing the generated text and metrics
         """
         data = self._enforce_defaults(params)
+        self.logger.debug(f"Generate request with prompt: {data['prompt'][:50]}...")
 
         # Ensure stream parameter is at the top level, not inside options
         is_streaming = False
@@ -263,6 +323,8 @@ class OllamaClient:
         t0 = time.time()
         resp = self._make_request(self.GENERATE_ENDPOINT, data, stream=False, timeout=timeout)
         elapsed = time.time() - t0
+        self.logger.info(f"Generation completed in {elapsed:.2f} seconds")
+        
         resp["metrics"] = {
             "inference_time": elapsed,
             "tokens_per_second": len(resp.get("response", "").split()) / elapsed
@@ -286,6 +348,7 @@ class OllamaClient:
         """
         data = self._enforce_defaults(params)
         data["stream"] = True
+        self.logger.info("Starting streaming generation")
 
         resp = self._make_request(self.GENERATE_ENDPOINT, data,
                                  stream=True, timeout=timeout)
@@ -295,16 +358,21 @@ class OllamaClient:
         for line in resp.iter_lines():
             if not line:
                 continue
-            chunk = json.loads(line)
-            tokens += 1
-            elapsed = time.time() - t0
-            chunk["metrics"] = {
-                "inference_time": elapsed,
-                "tokens_per_second": tokens / elapsed if elapsed else 0
-            }
-            yield chunk
-            if chunk.get("done"):
-                break
+            try:
+                chunk = json.loads(line)
+                tokens += 1
+                elapsed = time.time() - t0
+                chunk["metrics"] = {
+                    "inference_time": elapsed,
+                    "tokens_per_second": tokens / elapsed if elapsed else 0
+                }
+                yield chunk
+                if chunk.get("done"):
+                    self.logger.info(f"Streaming completed after {tokens} tokens in {elapsed:.2f} seconds")
+                    break
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse streaming response: {e}")
+                continue
 
     def get_model_metrics(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -313,6 +381,7 @@ class OllamaClient:
         Returns:
             Dictionary with performance metrics
         """
+        self.logger.info(f"Performing performance probe for model: {self._default_model}")
         gen_params = GenerationParameters(
             model=self._default_model,
             prompt="Hello",
@@ -322,10 +391,12 @@ class OllamaClient:
         t0 = time.time()
         resp = self.generate(gen_params, timeout=timeout)
         elapsed = time.time() - t0
-        return {
+        metrics = {
             "model": self._default_model,
             "startup_time": elapsed,
             "first_token_time": elapsed,
             "tokens_per_second": resp["metrics"]["tokens_per_second"],
             "memory_usage": resp.get("memory_used", 0)
         }
+        self.logger.info(f"Model metrics: {metrics}")
+        return metrics

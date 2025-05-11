@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Dict, List, Any
 import os
+import sys
 
 class rStarDataLoader:
     """
@@ -16,7 +17,38 @@ class rStarDataLoader:
             logger: Optional logger instance (will create one if not provided)
         """
         self.dataset_path = os.environ.get("DATASET_PATH")
+        
+        # Set up module-specific logger
         self.logger = logging.getLogger("ai_research_agent.rstar_data_loader")
+        self._setup_logger()
+    
+    def _setup_logger(self):
+        """
+        Configure the logger with appropriate handlers and formatting.
+        """
+        # Only configure if the logger doesn't already have handlers
+        if not self.logger.handlers:
+            # Set an appropriate log level
+            self.logger.setLevel(logging.INFO)
+            
+            # Create console handler that logs to stderr
+            console_handler = logging.StreamHandler(sys.stderr)
+            console_handler.setLevel(logging.INFO)
+            
+            # Create formatter
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            console_handler.setFormatter(formatter)
+            
+            # Add the handler to the logger
+            self.logger.addHandler(console_handler)
+            
+            # Prevent propagation to root logger to avoid duplicate messages
+            self.logger.propagate = False
+            
+            self.logger.debug("rStarDataLoader logger has been configured")
     
     def load(self) -> List[Dict[str, Any]]:
         """
