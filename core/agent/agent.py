@@ -64,6 +64,7 @@ class Agent:
         self.logger.info(f"Agent initialized with run ID: {self.run_id}")
         self.logger.info(f"Using agent model: {self.config['agent_model']}")
         self.logger.info(f"Using reasoner model: {self.config['reasoner_model']}")
+        self.logger.info(f"Memory window size: {self.config.get('memory_window_size', 0)}")
         
     def _set_environment_variables(self):
         """
@@ -187,13 +188,14 @@ class Agent:
             )
         }
         
-        # Now initialize experiment chain with critique chain dependency
+        # Now initialize experiment chain with critique chain dependency and memory window size
         chains["experiment"] = ExperimentChain(
             llm=self.llm,
             workspace=self.workspace,
             directive=load_directive(f"{directives_base_path}/experiment_chain.yaml"),
             max_iterations=self.config["max_coding_iters"],
-            critique_chain=chains["critique"]  # Pass the critique chain
+            critique_chain=chains["critique"],  # Pass the critique chain
+            memory_window_size=self.config.get("memory_window_size", 0)  # Pass memory window size
         )
         
         self.logger.info("Agent chains initialized")

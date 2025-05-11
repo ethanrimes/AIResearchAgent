@@ -9,6 +9,7 @@ import os
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import json
 
 def get_current_experiment_code(experiment_dir: Path) -> str:
     """
@@ -240,3 +241,182 @@ def run_pyright_type_check(experiment_dir: Path) -> Dict[str, Any]:
         result["has_errors"] = True
     
     return result
+
+
+def format_experiment_prompt(
+    iteration: int,
+    directive: str,
+    experiment_dir: Path,
+    entry_script: str,
+    plan_data: Dict[str, Any] = None,
+    previous_output: str = None,
+    error_information: str = None,
+    type_check_results: Dict[str, Any] = None,
+    critique_results: Dict[str, Any] = None,
+    validation_results: Dict[str, Any] = None
+) -> str:
+    """
+    Format the prompt for the experiment agent based on the current iteration.
+    
+    Args:
+        iteration: Current iteration number.
+        directive: The directive for the agent.
+        experiment_dir: Path to the experiment directory.
+        entry_script: Name of the entry script file.
+        plan_data: Optional experiment plan data.
+        previous_output: Optional output from previous agent run.
+        error_information: Optional error information.
+        type_check_results: Optional type check results.
+        critique_results: Optional critique results.
+        validation_results: Optional validation results.
+        
+    Returns:
+        str: Formatted prompt for the agent.
+    """
+    logger = logging.getLogger("ai_research_agent.experiment_utils")
+    
+    if iteration == 0:
+        # Initial prompt for iteration 0
+        prompt_parts = [
+            f"# Directive\n{directive}\n\n",
+            f"# Iteration\n{iteration}\n\n"
+        ]
+        
+        # Add experiment plan if available
+        if plan_data:
+            experiment_plan = plan_data.get("experiment_plan", {})
+            implementation_plan = plan_data.get("implementation_plan", {})
+            
+            prompt_parts.append(f"# Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n")
+            prompt_parts.append(f"# Implementation Plan\n```json\n{json.dumps(implementation_plan, indent=2)}\n```\n\n")
+        
+        # Add hypotheses if available
+        hypotheses_file = Path("/hypothesis/hypotheses.json")
+        if hypotheses_file.exists():
+            try:
+                hypotheses_content = json.loads(hypotheses_file.read_text())
+                prompt_parts.append(f"# Hypotheses\n```json\n{json.dumps(hypotheses_content, indent=2)}\n```\n\n")
+            except Exception as e:
+                logger.error(f"Error reading hypotheses file: {e}")
+        
+        # Add API documentation
+        api_doc_file = Path("/read_only/api.md")
+        if api_doc_file.exists():
+            try:
+                api_docs = api_doc_file.read_text()
+                prompt_parts.append(f"# API Documentation\n# These are the APIs which must be used for data loader, model client, answer extraction and evaluation\n{api_docs}\n\n")
+            except Exception as e:
+                logger.error(f"Error reading API documentation: {e}")
+        
+        # Add experiment directory information
+        prompt_parts.append(f"# Experiment Code Directory\n{experiment_dir}\n\n")
+        
+        # Add entry point information
+        prompt_parts.append(f"# Entry Point\n{entry_script}\n\n")
+        
+        # Add instructions for implementation
+        prompt_parts.append(
+            "# Task\n"
+            "Implement the experiment according to the plan. Create all required files in the experiment directory.\n"
+            f"Create a bash script called '{entry_script}' that will run the experiment and output results to '/results/results_summary.json'.\n"
+            "The experiment must implement all hypotheses and include a baseline calculation for comparison.\n\n"
+        )
+        
+    else:
+        # Prompt for subsequent iterations
+        prompt_parts = [
+            f"# Directive\n{directive}\n\n",
+            f"# Iteration\n{iteration}\n\n"
+        ]
+        
+        # Add previous output if available
+        if previous_output:
+            prompt_parts.append(f"# Previous Output\n{previous_output}\n\n")
+        
+        # Add current experiment code
+        current_code = get_current_experiment_code(experiment_dir)
+        prompt_parts.append(f"# Current Experiment Code\n{current_code}\n\n")
+        
+        # Add error information if available
+        if error_information:
+            prompt_parts.append(f"# Error Information\n{error_information}\n\n")
+        
+        # Add type check results if available
+        if type_check_results:
+            type_check_section = ""
+            if type_check_results.get("has_errors", False):
+                type_check_section = f"# Type Check Results\nFound {type_check_results.get('error_count', 0)} type errors:\n- " + "\n- ".join(type_check_results.get('errors', [])) + "\n\n"
+            else:
+                type_check_section = "# Type Check Results\nNo type errors found.\n\n"
+            prompt_parts.append(type_check_section)
+        
+        # Add critique results if available
+        if critique_results:
+            prompt_parts.append(f"# Critique Results\n```json\n{json.dumps(critique_results, indent=2)}\n```\n\n")
+        
+        # Add validation results if available
+        if validation_results:
+            custom_checks = [
+                f"- Entry script exists: {validation_results.get('entry_script_exists', False)}",
+                f"- Python files in experiment directory: {validation_results.get('python_files_exist', False)}",
+                f"- results_summary.json exists: {validation_results.get('results_file_exists', False)}"
+            ]
+            
+            prompt_parts.append(f"# Validation Checks\n" + "\n".join(custom_checks) + "\n\n")
+            
+            # Add bash output if available
+            if validation_results.get('bash_output'):
+                prompt_parts.append(f"# Bash Output\n```\n{validation_results.get('bash_output')}\n```\n\n")
+        
+        # Add task instructions for this iteration
+        prompt_parts.append(
+            "# Task\n"
+            "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
+            f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
+        )
+    
+    return "".join(prompt_parts)
+
+# ------------------------------------------------------------------
+# Helper method for logging validation results
+# ------------------------------------------------------------------
+def log_validation_results(validation_results: Dict[str, Any], iteration: int) -> None:
+    """Helper method to log validation results with clear prefacing."""
+    logger = logging.getLogger("ai_research_agent.experiment_utils")
+    
+    logger.info("=" * 50)
+    logger.info(f"VALIDATION RESULTS - Iteration {iteration + 1}")
+    logger.info("-" * 50)
+    
+    # Log core validation checks
+    logger.info("VALIDATION: Entry script exists: %s", 
+                   "✓ PASS" if validation_results["entry_script_exists"] else "✗ FAIL")
+    logger.info("VALIDATION: Python files exist: %s", 
+                   "✓ PASS" if validation_results["python_files_exist"] else "✗ FAIL")
+    logger.info("VALIDATION: Results file exists: %s", 
+                   "✓ PASS" if validation_results["results_file_exists"] else "✗ FAIL")
+    
+    # Log all errors if any
+    if validation_results["errors"]:
+        logger.warning("VALIDATION ERRORS:")
+        for i, error in enumerate(validation_results["errors"], 1):
+            logger.warning("  %d. %s", i, error)
+    else:
+        logger.info("VALIDATION: No errors detected")
+        
+    # Log bash output summary if available
+    if validation_results.get("bash_output"):
+        # Get first few lines of bash output for the log (avoid excessive logging)
+        bash_lines = validation_results["bash_output"].split("\n")
+        preview = "\n".join(bash_lines[:5])
+        if len(bash_lines) > 5:
+            preview += f"\n... and {len(bash_lines) - 5} more lines"
+        logger.info("VALIDATION: Bash execution output preview:\n%s", preview)
+        
+    logger.info("VALIDATION: Overall status: %s", 
+                   "✓ PASSED" if all([
+                       validation_results["entry_script_exists"],
+                       validation_results["python_files_exist"], 
+                       validation_results["results_file_exists"]
+                   ]) else "✗ FAILED")
+    logger.info("=" * 50)
