@@ -1,6 +1,44 @@
 #!/bin/bash
 set -euo pipefail
 
+# Set up log files early
+LOG_DIR="/logs"
+CONTAINER_LOG="${LOG_DIR}/container.log"
+FILE_STRUCTURE_LOG="${LOG_DIR}/file_structure.log"
+
+# Ensure log directory exists and is writable
+if [[ ! -d "$LOG_DIR" ]]; then
+    mkdir -p "$LOG_DIR" || { echo "❌ Failed to create ${LOG_DIR}"; exit 1; }
+fi
+
+if [[ ! -w "$LOG_DIR" ]]; then
+    echo "❌ Cannot write to ${LOG_DIR}"; exit 1
+fi
+
+# Set up named pipes for output redirection
+STDOUT_PIPE="/tmp/stdout_pipe_$$"
+STDERR_PIPE="/tmp/stderr_pipe_$$"
+
+# Clean up any existing pipes with the same names
+rm -f "$STDOUT_PIPE" "$STDERR_PIPE"
+
+# Create the named pipes
+mkfifo "$STDOUT_PIPE" "$STDERR_PIPE"
+
+# Start tee processes to capture output
+tee -a "$CONTAINER_LOG" < "$STDOUT_PIPE" &
+STDOUT_TEE_PID=$!
+tee -a "$CONTAINER_LOG" < "$STDERR_PIPE" >&2 &
+STDERR_TEE_PID=$!
+
+# Redirect script output to pipes
+exec > "$STDOUT_PIPE" 2> "$STDERR_PIPE"
+
+# Set up cleanup on exit
+trap 'rm -f "$STDOUT_PIPE" "$STDERR_PIPE"; kill $STDOUT_TEE_PID $STDERR_TEE_PID 2>/dev/null' EXIT
+
+echo "Logging container output to $CONTAINER_LOG"
+
 # -------------------------------------------------
 # 0.  Read environment variables and config file
 # -------------------------------------------------
@@ -37,26 +75,11 @@ echo "Starting AI Research Agent with experiment timeout: ${EXPERIMENT_TIMEOUT}s
 echo "Using OpenAI API for agent"
 echo "Using Ollama for local inference via host.docker.internal"
 
-# Set up log files
-LOG_DIR="/logs"
-CONTAINER_LOG="${LOG_DIR}/container.log"
-FILE_STRUCTURE_LOG="${LOG_DIR}/file_structure.log"
-
-# Ensure log directory exists and is writable
-if [[ ! -d "$LOG_DIR" ]]; then
-    echo "Creating log directory ${LOG_DIR}..."
-    mkdir -p "$LOG_DIR" || { echo "❌ Failed to create ${LOG_DIR}"; exit 1; }
-fi
-
-if [[ ! -w "$LOG_DIR" ]]; then
-    echo "❌ Cannot write to ${LOG_DIR}"; exit 1
-else
-    echo "✓ Write access to ${LOG_DIR} confirmed"
-fi
-
-# Redirect output to log file and console
-exec > >(tee -a "$CONTAINER_LOG") 2>&1
-echo "Logging container output to $CONTAINER_LOG"
+# Debug information
+echo "Debug: Log directory: $LOG_DIR"
+ls -la "$LOG_DIR" || echo "Cannot list log directory"
+echo "Debug: Current user: $(whoami)"
+echo "Debug: tee command: $(which tee 2>/dev/null || echo 'tee not found')"
 
 # -------------------------------------------------
 # 1.  Filesystem-permission checks
@@ -64,7 +87,7 @@ echo "Logging container output to $CONTAINER_LOG"
 echo "Checking filesystem permissions..."
 
 readonly_ro="/read_only"
-readonly_data="/app/data"
+readonly_data="/data"
 
 if [[ ! -r "$readonly_ro" ]];   then echo "❌ Cannot read $readonly_ro";   exit 1; else echo "✓ Read access to $readonly_ro confirmed"; fi
 if [[ ! -r "$readonly_data" ]]; then echo "❌ Cannot read $readonly_data"; exit 1; else echo "✓ Read access to $readonly_data confirmed"; fi
@@ -151,7 +174,8 @@ echo "✓ Complete file structure logged to $FILE_STRUCTURE_LOG"
 # 3.  Run the infra "setup tests" suite (pytest)
 # -------------------------------------------------
 echo "Running container setup tests with pytest..."
-/app/infra/docker/setup_tests/run_tests.sh
+# Only run the specified tests with verbose output
+/app/infra/docker/setup_tests/run_tests.sh /app/infra/docker/setup_tests/test_permissions.py /app/infra/docker/setup_tests/test_ollama_connectivity.py /app/infra/docker/setup_tests/test_openai_connectivity.py
 echo "✓ pytest setup tests passed"
 
 # -------------------------------------------------

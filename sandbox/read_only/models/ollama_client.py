@@ -20,6 +20,8 @@ from typing import Dict, List, Any, Optional, Union, Generator
 import requests
 from dataclasses import dataclass
 
+from core.agent.agent_config import AgentConfig
+
 # ---------------------------------------------------------
 #  Dataclasses
 # ---------------------------------------------------------
@@ -138,33 +140,39 @@ class OllamaClient:
 
     # ---------- construction & immutability helpers ----------
     def __init__(self) -> None:
-        object.__setattr__(self, "_base_url",
-                        os.getenv("OLLAMA_BASE_URL",
-                                                "http://host.docker.internal:11434"))
-        object.__setattr__(self, "_default_model",
-                        os.getenv("OLLAMA_DEFAULT_MODEL"))
+        # Get configuration from the registry
+        config = AgentConfig()
+        
+        # Set base URL from environment with fallback to default
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+        
+        # Set immutable attributes using object.__setattr__
+        object.__setattr__(self, "_base_url", base_url)
+        object.__setattr__(self, "_default_model", config.reasoner_model)
+        
         if not self._default_model:
-            raise ValueError("A default model must be supplied via "
-                            "OLLAMA_DEFAULT_MODEL environment variable.")
+            raise ValueError("Reasoner model not set in configuration")
+        
         object.__setattr__(self, "_session", requests.Session())
         
         # Configure module-specific logger
         logger_name = "ai_research_agent.ollama_client"
         object.__setattr__(self, "logger", setup_module_logger(logger_name))
-        self.logger.info(f"Initializing OllamaClient with base URL: {self._base_url}, model: {self._default_model}")
+        self.logger.info(f"Initializing OllamaClient with base URL: {self._base_url}")
+        self.logger.info(f"Using model from configuration: {self._default_model}")
 
-        # immediately verify connectivity
+        # Verify connectivity
         self._check_connection()
 
         # *freeze* – disallow changes to critical attrs after this point
         object.__setattr__(self, "_immutable", True)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        # prevent external mutation of critical fields once initialised
+        # prevent external mutation of critical fields once initialized
         if getattr(self, "_immutable", False) and name in {
             "_base_url", "_default_model", "base_url", "default_model"
         }:
-            raise AttributeError(f"{name} is read-only after initialisation.")
+            raise AttributeError(f"{name} is read-only after initialization.")
         super().__setattr__(name, value)
 
     # read-only public accessors
@@ -201,6 +209,7 @@ class OllamaClient:
         data["model"] = self._default_model   # hard-overwrite
         return data
 
+    # ... (rest of the class implementation remains unchanged) ...
     def _make_request(self, endpoint: str, data: Dict[str, Any], *, stream: bool = False, timeout: Optional[float] = None) -> Union[requests.Response, Dict[str, Any]]:
         url = self._get_url(endpoint)
         self.logger.debug(f"Making request to {url} with stream={stream}")

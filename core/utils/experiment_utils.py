@@ -90,7 +90,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         validation_results["entry_script_exists"] = True
     
     # STEP 2: Check that Python files exist in experiment directory
-    python_files = list(experiment_dir.glob("*.py"))
+    python_files = list(experiment_dir.glob("**/*.py"))
     if not python_files:
         validation_results["errors"].append("No Python files found in the experiment directory")
         return validation_results

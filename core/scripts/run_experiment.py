@@ -13,7 +13,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from core.utils.path_utils import get_active_run_timestamp
-
+import pytest
 
 # Add the project root to the Python path
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -23,6 +23,7 @@ sys.path.append(str(project_root))
 from core.agent.agent import Agent
 # Import the logging utility
 from core.utils.logging_utils import setup_logging
+
 
 def parse_args():
     """Parse command-line arguments."""
@@ -61,27 +62,14 @@ def main():
             logger.error(f"Configuration file not found: {config_path}")
             sys.exit(1)
         
-        # Read the config file
+        # Read the config file directly (Agent will use the centralized configuration)
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        # Set timeout from config if available
+        # Set timeout from config if available (for backwards compatibility)
         if "max_run_duration" in config:
             logger.info(f"Using timeout from config: {config['max_run_duration']}s")
             os.environ["EXPERIMENT_TIMEOUT"] = str(config["max_run_duration"])
-        
-        # Override config values with environment variables if they exist
-        if os.environ.get("DATASET_PATH"):
-            logger.info(f"Overriding dataset_path from environment: {os.environ['DATASET_PATH']}")
-            config["dataset_path"] = os.environ["DATASET_PATH"]
-        
-        if os.environ.get("AGENT_MODEL"):
-            logger.info(f"Overriding agent_model from environment: {os.environ['AGENT_MODEL']}")
-            config["agent_model"] = os.environ["AGENT_MODEL"]
-            
-        if os.environ.get("REASONER_MODEL"):
-            logger.info(f"Overriding reasoner_model from environment: {os.environ['REASONER_MODEL']}")
-            config["reasoner_model"] = os.environ["REASONER_MODEL"]
         
         # Ensure environment variables for API access are set
         if not os.environ.get("OPENAI_API_KEY"):
@@ -89,10 +77,10 @@ def main():
             
         if not os.environ.get("OLLAMA_BASE_URL"):
             logger.warning("OLLAMA_BASE_URL environment variable is not set")
-            os.environ["OLLAMA_BASE_URL"] = "http://host.docker.internal:11434"
+            os.environ["OLLAMA_BASE_URL"] = "http://localhost:11434"
             logger.info(f"Set default OLLAMA_BASE_URL: {os.environ['OLLAMA_BASE_URL']}")
         
-        # Update workspace paths to use flattened directory structure
+        # Update workspace paths to use flattened directory structure in the config
         logger.info("Configuring workspace with flattened directory structure")
         config['workspace'] = {
             'experiment': '/experiment',
@@ -115,7 +103,17 @@ def main():
         # Initialize the agent with the modified configuration
         logger.info("Initializing AI Research Agent")
         agent = Agent(str(temp_config_path))
-        
+
+        # Run additional component tests after agent initialization
+        logger.info("Running additional component tests")
+        try:
+            from app.infra.docker.integration_tests.run_integration_tests import run_additional_tests
+            run_additional_tests(agent)
+        except ImportError:
+            logger.warning("Could not import run_additional_tests module, skipping additional tests")
+        except Exception as e:
+            logger.error(f"Error running additional tests: {e}")
+
         # Run the agent
         logger.info("Starting agent execution")
         results = agent.run()

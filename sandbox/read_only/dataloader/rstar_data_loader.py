@@ -3,6 +3,9 @@ import logging
 from typing import Dict, List, Any
 import os
 import sys
+from pathlib import Path
+
+from core.agent.agent_config import AgentConfig  # Import the centralized config manager
 
 class rStarDataLoader:
     """
@@ -11,16 +14,24 @@ class rStarDataLoader:
     def __init__(self):
         """
         Initialize the data loader.
-        
-        Args:
-            dataset_path: Path to the JSON dataset file
-            logger: Optional logger instance (will create one if not provided)
         """
-        self.dataset_path = os.environ.get("DATASET_PATH")
+        # Get configuration from the registry
+        config = AgentConfig()
+        # Store dataset path as private attribute
+        self._dataset_path = config.dataset_path
         
         # Set up module-specific logger
         self.logger = logging.getLogger("ai_research_agent.rstar_data_loader")
         self._setup_logger()
+        
+        if not self._dataset_path:
+            self.logger.warning("Dataset path is not set in the configuration")
+    
+    # Define dataset_path as a read-only property
+    @property
+    def dataset_path(self) -> str:
+        """Get the immutable dataset path."""
+        return self._dataset_path
     
     def _setup_logger(self):
         """
@@ -64,14 +75,17 @@ class rStarDataLoader:
                 "url": ""        # Empty placeholder
             }
         """
-        self.dataset_path = os.environ.get("DATASET_PATH")
-        self.logger.info(f"Loading dataset from: {self.dataset_path}")
+        if not self._dataset_path:
+            self.logger.error("Cannot load data: dataset path is not set")
+            return []
+            
+        self.logger.info(f"Loading dataset from: {self._dataset_path}")
         
-        if not os.path.isabs(self.dataset_path):
-            self.dataset_path = os.path.join("/app", self.dataset_path)
+        # Ensure we have an absolute path
+        dataset_path = Path(self._dataset_path)
         
         try:
-            with open(self.dataset_path, "r", encoding="utf-8") as f:
+            with open(dataset_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
             self.logger.error(f"Error loading dataset: {e}")

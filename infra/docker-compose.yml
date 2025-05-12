@@ -23,15 +23,16 @@ services:
       - EXPERIMENT_TIMEOUT=${EXPERIMENT_TIMEOUT:-600}
       # - EXPERIMENT_RUN_PATH=${EXPERIMENT_RUN_PATH}
     volumes:
-      # Core code and data remain the same
+      # Core application code
       - ../core:/app/core:ro
-      - ../data:/app/data:ro
+      
+      # Data directory - mount only at root
       - ../data:/data:ro
       
-      # Mount read_only directory at the root level
+      # Read-only directory - mount at root
       - ../sandbox/read_only:/read_only:ro
       
-      # Mount experiment directories directly at root
+      # Experiment directories
       - ${HOST_RUN_DIR}/experiment:/experiment:rw
       - ${HOST_RUN_DIR}/findings:/findings:rw
       - ${HOST_RUN_DIR}/hypothesis:/hypothesis:rw
@@ -39,9 +40,6 @@ services:
       - ${HOST_RUN_DIR}/results:/results:rw
       - ${HOST_RUN_DIR}/logs:/logs:rw
       - ${HOST_RUN_DIR}/scratchpad:/scratchpad:rw
-      
-      # Keep this for compatibility with existing scripts
-      # - ${HOST_RUN_DIR}:${EXPERIMENT_RUN_PATH}:rw
     read_only: true
     tmpfs:
       - /tmp

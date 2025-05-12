@@ -15,6 +15,7 @@ from typing import Dict, Any, List
 import openai
 
 from core.utils.path_utils import get_active_run_timestamp
+from core.agent.agent_config import AgentConfig  # Import the centralized config manager
 
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
@@ -43,10 +44,13 @@ class Agent:
             config_path: Path to the configuration file.
         """
         self.logger = logging.getLogger("ai_research_agent.agent")
-        self.config = self._load_config(config_path)
         
-        # Set environment variables for the Ollama client
-        self._set_environment_variables()
+        # Initialize the global configuration registry
+        config_registry = AgentConfig()
+        self.config = config_registry.load_config(config_path)
+        
+        # Lock the configuration to prevent further modifications
+        config_registry.lock()
         
         try:
             self.run_id = get_active_run_timestamp()
@@ -65,44 +69,6 @@ class Agent:
         self.logger.info(f"Using agent model: {self.config['agent_model']}")
         self.logger.info(f"Using reasoner model: {self.config['reasoner_model']}")
         self.logger.info(f"Memory window size: {self.config.get('memory_window_size', 0)}")
-        
-    def _set_environment_variables(self):
-        """
-        Set environment variables needed by downstream components.
-        """
-        # Set the OLLAMA_DEFAULT_MODEL environment variable from config
-        if 'reasoner_model' in self.config:
-            os.environ["OLLAMA_DEFAULT_MODEL"] = self.config['reasoner_model']
-            self.logger.info(f"Set OLLAMA_DEFAULT_MODEL to {self.config['reasoner_model']}")
-        else:
-            self.logger.warning("No reasoner_model found in config, OLLAMA_DEFAULT_MODEL not set")
-            
-        # Set the DATASET_PATH environment variable from config
-        if 'dataset_path' in self.config:
-            os.environ["DATASET_PATH"] = self.config['dataset_path']
-            self.logger.info(f"Set DATASET_PATH to {self.config['dataset_path']}")
-        else:
-            self.logger.warning("No dataset_path found in config, DATASET_PATH not set")
-        
-        
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
-        """
-        Load the configuration from a YAML file.
-        
-        Args:
-            config_path: Path to the configuration file.
-            
-        Returns:
-            Dict containing the configuration.
-        """
-        try:
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-            self.logger.info(f"Loaded configuration from {config_path}")
-            return config
-        except Exception as e:
-            self.logger.error(f"Error loading configuration: {e}")
-            raise
             
     def _setup_workspace(self) -> Dict[str, Path]:
         """
@@ -111,6 +77,10 @@ class Agent:
         Returns:
             Dict containing paths to workspace directories.
         """
+        # Get the dataset path from the config registry
+        config_registry = AgentConfig()
+        dataset_path = config_registry.dataset_path
+        
         # Set up workspace using direct root paths
         workspace = {
             "base_dir": Path("/app"),
@@ -122,7 +92,7 @@ class Agent:
             "results": Path("/results"),
             "findings": Path("/findings"),
             "scratchpad": Path("/scratchpad"),
-            "dataset": Path(self.config["dataset_path"])
+            "dataset": Path(dataset_path) if dataset_path else None
         }
         
         # Ensure writable directories exist
