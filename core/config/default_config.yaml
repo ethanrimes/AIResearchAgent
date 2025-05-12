@@ -12,3 +12,7 @@ memory_window_size: 0    # Size of memory window for context (0 for unlimited)
 max_coding_iters: 20    # Maximum number of coding iterations
 max_run_duration: 6000    # Maximum runtime in seconds
 bash_timeout: 6000    # Timeout for bash commands in seconds
+
+## Ollama Generation Configuration
+batch_size: 4    # Number of prompts to process concurrently in each batch
+max_num_predict: 2048    # Maximum number of tokens to generate per request

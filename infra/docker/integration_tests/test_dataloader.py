@@ -1,11 +1,11 @@
 import pytest
 
 # Add the root directory to Python path
+import sys
 sys.path.append('/')
 from read_only.dataloader.rstar_data_loader import rStarDataLoader
 
 
-import sys
 import os
 import logging
 

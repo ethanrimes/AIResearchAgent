@@ -4,7 +4,6 @@ Main entry point for the AI Research Agent.
 This script initializes and runs the agent using the configuration provided.
 """
 import pytest
-from core.utils.path_utils import get_active_run_timestamp
 import os
 import sys
 import json

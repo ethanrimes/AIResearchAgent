@@ -15,8 +15,10 @@ import os
 import sys
 import time
 import logging
-from typing import Dict, List, Any, Optional, Union, Generator
+import asyncio
+from typing import Dict, List, Any, Optional, Union, Sequence
 
+import aiohttp
 import requests
 from dataclasses import dataclass
 
@@ -38,12 +40,11 @@ class GenerationParameters:
     system: Optional[str] = None
     template: Optional[str] = None
     context: Optional[List[int]] = None
-    stream: bool = False
-    raw: bool = False
     format: Optional[str] = None
+    raw: bool = False
 
     # generation options
-    num_predict: Optional[int] = 32768
+    num_predict: Optional[int] = None
     temperature: Optional[float] = None
     top_k: Optional[int] = None
     top_p: Optional[float] = None
@@ -58,7 +59,7 @@ class GenerationParameters:
     tfs_z: Optional[float] = None
     num_gpu: Optional[int] = None
     num_thread: Optional[int] = None
-    num_ctx: Optional[int] = 32768
+    num_ctx: Optional[int] = None
     num_batch: Optional[int] = None
     num_keep: Optional[int] = None
 
@@ -69,12 +70,11 @@ class GenerationParameters:
         if self.system is not None:     d["system"]   = self.system
         if self.template is not None:   d["template"] = self.template
         if self.context is not None:    d["context"]  = self.context
-        if self.stream:                 d["stream"]   = True
         if self.raw:                    d["raw"]      = True
         if self.format is not None:     d["format"]   = self.format
 
         # collect generation-options (excluding stream which should be top-level)
-        base_fields = set(d.keys()) | {"model", "prompt", "stream", "raw"}
+        base_fields = set(d.keys()) | {"model", "prompt", "raw"}
         options = {k: v for k, v in self.__dict__.items()
                    if k not in base_fields and v is not None}
         if options:
@@ -150,16 +150,23 @@ class OllamaClient:
         object.__setattr__(self, "_base_url", base_url)
         object.__setattr__(self, "_default_model", AgentConfig.reasoner_model())
         
+        # Get batch size and max num predict from config
+        config = AgentConfig.config()
+        batch_size = config.get("batch_size", 4)  # Default to 4 if not specified
+        max_num_predict = config.get("max_num_predict", 2048)  # Default to 2048 if not specified
+        
+        object.__setattr__(self, "_batch_size", batch_size)
+        object.__setattr__(self, "_max_num_predict", max_num_predict)
+        
         if not self._default_model:
             raise ValueError("Reasoner model not set in configuration")
-        
-        object.__setattr__(self, "_session", requests.Session())
         
         # Configure module-specific logger
         logger_name = "ai_research_agent.ollama_client"
         object.__setattr__(self, "logger", setup_module_logger(logger_name))
         self.logger.info(f"Initializing OllamaClient with base URL: {self._base_url}")
         self.logger.info(f"Using model from configuration: {self._default_model}")
+        self.logger.info(f"Batch size: {self._batch_size}, Max num predict: {self._max_num_predict}")
 
         # Verify connectivity
         self._check_connection()
@@ -170,7 +177,8 @@ class OllamaClient:
     def __setattr__(self, name: str, value: Any) -> None:
         # prevent external mutation of critical fields once initialized
         if getattr(self, "_immutable", False) and name in {
-            "_base_url", "_default_model", "base_url", "default_model"
+            "_base_url", "_default_model", "_batch_size", "_max_num_predict",
+            "base_url", "default_model", "batch_size", "max_num_predict"
         }:
             raise AttributeError(f"{name} is read-only after initialization.")
         super().__setattr__(name, value)
@@ -183,6 +191,14 @@ class OllamaClient:
     @property
     def default_model(self) -> str:
         return self._default_model
+        
+    @property
+    def batch_size(self) -> int:
+        return self._batch_size
+        
+    @property
+    def max_num_predict(self) -> int:
+        return self._max_num_predict
 
     # ---------- internal helpers ----------
     def _get_url(self, endpoint: str) -> str:
@@ -191,7 +207,7 @@ class OllamaClient:
     def _check_connection(self) -> None:
         try:
             # Using a simple GET to check if server is responsive
-            r = self._session.get(f"{self._base_url}/api/tags", timeout=5)
+            r = requests.get(f"{self._base_url}/api/tags", timeout=5)
             r.raise_for_status()
             self.logger.info("Connected to Ollama server at %s", self._base_url)
         except requests.RequestException as exc:
@@ -200,199 +216,189 @@ class OllamaClient:
 
     def _enforce_defaults(self, params: Union[GenerationParameters, Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Convert `params` to a dict and inject the enforced default model.
+        Convert `params` to a dict and inject the enforced default model and cap num_predict.
         """
         if hasattr(params, "to_dict"):
             data = params.to_dict()            # dataclass instance
         else:
             data = dict(params)               # shallow copy of user dict
-        data["model"] = self._default_model   # hard-overwrite
+            
+        data["model"] = self._default_model   # hard-overwrite model
+        
+        # Cap num_predict if it exceeds max_num_predict
+        if "options" in data and "num_predict" in data["options"]:
+            data["options"]["num_predict"] = min(
+                data["options"]["num_predict"], 
+                self._max_num_predict
+            )
+        elif "num_predict" in data:
+            data["num_predict"] = min(data["num_predict"], self._max_num_predict)
+        else:
+            # Set default num_predict if not provided
+            if "options" not in data:
+                data["options"] = {}
+            data["options"]["num_predict"] = self._max_num_predict
+            
         return data
 
-    # ... (rest of the class implementation remains unchanged) ...
-    def _make_request(self, endpoint: str, data: Dict[str, Any], *, stream: bool = False, timeout: Optional[float] = None) -> Union[requests.Response, Dict[str, Any]]:
+    async def _make_request_async(self, endpoint: str, data: Dict[str, Any], *, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Asynchronously make a request to the Ollama API.
+        
+        Args:
+            endpoint: API endpoint to call
+            data: Request data
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Response dictionary
+        """
         url = self._get_url(endpoint)
-        self.logger.debug(f"Making request to {url} with stream={stream}")
-
-        # Double-check stream setting between function param and data to ensure consistency
-        if "stream" in data:
-            is_streaming = data["stream"]
-        else:
-            is_streaming = stream
-
-        if is_streaming:
-            self.logger.debug("Using streaming mode for request")
-            return self._session.post(url, json=data, stream=True, timeout=timeout)
+        self.logger.debug(f"Making async request to {url}")
         
-        # Explicitly ensure stream is set to False in data for non-streaming requests
-        data_copy = data.copy()
-        data_copy["stream"] = False
-        
-        # For non-streaming requests, use requests.post directly with the URL
-        self.logger.debug("Making non-streaming request")
-        resp = requests.post(url, json=data_copy, timeout=timeout)
-        try:
-            resp.raise_for_status()
-        except requests.RequestException as exc:
-            self.logger.error(f"Request failed: {exc}")
-            raise
-        
-        if not resp.content:
-            self.logger.warning("Received empty response")
-            return resp
-
-        # Handle different response formats based on content type
-        content_type = resp.headers.get('Content-Type', '')
-        self.logger.debug(f"Response content type: {content_type}")
-        
-        # If we're getting ndjson even though we requested non-streaming
-        if 'application/x-ndjson' in content_type:
-            # Combine all the chunks into a single response
+        async with aiohttp.ClientSession() as session:
             try:
-                lines = resp.text.strip().split("\n")
-                if not lines:
-                    self.logger.warning("No lines in NDJSON response")
-                    return {"response": ""}
-                
-                # Extract and concatenate all responses
-                full_response = ""
-                for line in lines:
+                async with session.post(url, json=data, timeout=timeout) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        self.logger.error(f"Request failed with status {resp.status}: {error_text}")
+                        raise aiohttp.ClientResponseError(
+                            request_info=resp.request_info,
+                            history=resp.history,
+                            status=resp.status,
+                            message=error_text
+                        )
+                    
+                    response_text = await resp.text()
+                    if not response_text:
+                        self.logger.warning("Received empty response")
+                        return {"response": ""}
+                    
                     try:
-                        chunk = json.loads(line)
-                        if "response" in chunk:
-                            full_response += chunk["response"]
+                        return json.loads(response_text)
                     except json.JSONDecodeError:
-                        self.logger.warning(f"Failed to parse JSON line: {line[:50]}...")
-                        continue
-                
-                # Get metadata from the last chunk if possible
-                try:
-                    last_chunk = json.loads(lines[-1])
-                    result = {**last_chunk, "response": full_response}
-                    return result
-                except (json.JSONDecodeError, IndexError):
-                    self.logger.warning("Failed to parse last chunk of NDJSON response")
-                    return {"response": full_response}
+                        self.logger.warning("Failed to parse JSON response, returning raw text")
+                        return {"response": response_text}
+            except asyncio.TimeoutError:
+                self.logger.error(f"Request timed out after {timeout}s")
+                raise
             except Exception as e:
-                self.logger.error(f"Error processing NDJSON response: {e}")
-                return {"response": resp.text}
-        
-        # Standard JSON response processing
-        try:
-            return resp.json()
-        except json.JSONDecodeError:
-            self.logger.warning("Failed to parse JSON response, returning raw text")
-            return {"response": resp.text}
+                self.logger.error(f"Error during async request: {e}")
+                raise
 
     # ---------- public API ----------
+    async def generate_async(self,
+                   params: Union[GenerationParameters, Dict[str, Any], List[Union[GenerationParameters, Dict[str, Any]]]],
+                   timeout: Optional[float] = None) -> List[Dict[str, Any]]:
+        """
+        Generate text asynchronously using the default model, handling batched prompts.
+        
+        Args:
+            params: Generation parameters or list of parameters (model will be overridden)
+            timeout: Request timeout in seconds
+            
+        Returns:
+            List of response dictionaries containing generated text and metrics
+        """
+        # Convert single parameter to list for uniform processing
+        if not isinstance(params, list):
+            params_list = [params]
+        else:
+            params_list = params
+            
+        self.logger.info(f"Processing {len(params_list)} prompts with batch size {self._batch_size}")
+        
+        # Process in batches
+        results = []
+        for i in range(0, len(params_list), self._batch_size):
+            batch = params_list[i:i + self._batch_size]
+            self.logger.info(f"Processing batch {i//self._batch_size + 1} with {len(batch)} prompts")
+            
+            # Prepare all requests in the batch
+            requests = []
+            for j, param in enumerate(batch):
+                data = self._enforce_defaults(param)
+                prompt_preview = data["prompt"][:100] + ("..." if len(data["prompt"]) > 100 else "")
+                self.logger.info(f"Batch {i//self._batch_size + 1}, Prompt {j+1}: {prompt_preview}")
+                
+                # Log generation parameters
+                gen_params = {k: v for k, v in data.items() if k != "prompt"}
+                gen_params["options"] = data.get("options", {})
+                self.logger.info(f"Generation parameters: {json.dumps(gen_params)}")
+                
+                requests.append((data, time.time()))
+                
+            # Process all requests in the batch concurrently
+            batch_results = await asyncio.gather(
+                *[self._make_request_async(self.GENERATE_ENDPOINT, data, timeout=timeout) 
+                  for data, _ in requests],
+                return_exceptions=True
+            )
+            
+            # Process results and add metrics
+            for j, ((data, start_time), result) in enumerate(zip(requests, batch_results)):
+                if isinstance(result, Exception):
+                    self.logger.error(f"Error in batch {i//self._batch_size + 1}, prompt {j+1}: {result}")
+                    results.append({
+                        "error": str(result),
+                        "metrics": {
+                            "inference_time": time.time() - start_time,
+                            "tokens_per_second": 0
+                        }
+                    })
+                else:
+                    elapsed = time.time() - start_time
+                    response_text = result.get("response", "")
+                    tokens = len(response_text.split())
+                    
+                    result["metrics"] = {
+                        "inference_time": elapsed,
+                        "tokens_per_second": tokens / elapsed if elapsed else 0,
+                        "total_tokens": tokens
+                    }
+                    
+                    # Log completed generation info
+                    self.logger.info(
+                        f"Batch {i//self._batch_size + 1}, Prompt {j+1} completed: "
+                        f"{len(response_text)} chars, {tokens} tokens, "
+                        f"{result['metrics']['tokens_per_second']:.2f} tokens/sec"
+                    )
+                    self.logger.info(
+                        f"Response preview: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+                    )
+                    
+                    results.append(result)
+                    
+        return results
+
     def generate(self,
-             params: Union[GenerationParameters, Dict[str, Any]],
-             timeout: Optional[float] = None) -> Dict[str, Any]:
+             params: Union[GenerationParameters, Dict[str, Any], List[Union[GenerationParameters, Dict[str, Any]]]],
+             timeout: Optional[float] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Generate text using the default model.
+        Generate text using the default model, with support for batched prompts.
         
         Args:
-            params: Generation parameters (the model will be overridden)
+            params: Generation parameters or list of parameters (model will be overridden)
             timeout: Request timeout in seconds
             
         Returns:
-            Response dictionary containing the generated text and metrics
+            Single response dictionary or list of response dictionaries
         """
-        data = self._enforce_defaults(params)
-        self.logger.debug(f"Generate request with prompt: {data['prompt'][:50]}...")
+        # Determine if this is a single or batch request
+        is_single = not isinstance(params, list)
         
-        # Log the generation parameters at INFO level
-        self.logger.info(f"Generation parameters: {json.dumps({k: v for k, v in data.items() if k != 'prompt'})}")
-        if 'prompt' in data:
-            self.logger.info(f"Prompt: {data['prompt'][:100]}{'...' if len(data['prompt']) > 100 else ''}")
-
-        # Ensure stream parameter is at the top level, not inside options
-        is_streaming = False
-        if isinstance(params, GenerationParameters):
-            is_streaming = params.stream
-        elif isinstance(params, dict):
-            is_streaming = params.get("stream", False)
-        
-        # Override stream setting in data
-        if "options" in data and "stream" in data["options"]:
-            # If stream was in options, move it to top level
-            data["stream"] = data["options"].pop("stream")
-            # Remove options if empty after popping stream
-            if not data["options"]:
-                data.pop("options")
-        
-        if is_streaming or data.get("stream", False):
-            # Set stream flag directly in data
-            data["stream"] = True
-            self.logger.info("Request set to streaming mode")
-            # Redirect to streaming helper
-            return {   # wrap generator in dict for symmetric API
-                "stream": self.generate_stream(data, timeout=timeout)
-            }
-        
-        # Ensure stream is explicitly set to False for non-streaming requests
-        data["stream"] = False
-        self.logger.info("Request set to non-streaming mode")
-
-        t0 = time.time()
-        resp = self._make_request(self.GENERATE_ENDPOINT, data, stream=False, timeout=timeout)
-        elapsed = time.time() - t0
-        self.logger.info(f"Generation completed in {elapsed:.2f} seconds")
-        
-        resp["metrics"] = {
-            "inference_time": elapsed,
-            "tokens_per_second": len(resp.get("response", "").split()) / elapsed
-                                if elapsed else 0
-        }
-        
-        # Log completed generation info at INFO level
-        response_text = resp.get("response", "")
-        self.logger.info(f"Completed generation: {len(response_text)} chars, metrics: {resp['metrics']}")
-        self.logger.info(f"Response preview: {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
-        
-        return resp
-
-    def generate_stream(self,
-                        params: Union[GenerationParameters, Dict[str, Any]],
-                        timeout: Optional[float] = None
-                        ) -> Generator[Dict[str, Any], None, None]:
-        """
-        Stream text generation using the default model.
-        
-        Args:
-            params: Generation parameters (the model will be overridden)
-            timeout: Request timeout in seconds
+        # Run the async method in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            results = loop.run_until_complete(self.generate_async(params, timeout))
+        finally:
+            loop.close()
             
-        Returns:
-            Generator yielding response chunks as they become available
-        """
-        data = self._enforce_defaults(params)
-        data["stream"] = True
-        self.logger.info("Starting streaming generation")
-
-        resp = self._make_request(self.GENERATE_ENDPOINT, data,
-                                 stream=True, timeout=timeout)
-
-        t0 = time.time()
-        tokens = 0
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            try:
-                chunk = json.loads(line)
-                tokens += 1
-                elapsed = time.time() - t0
-                chunk["metrics"] = {
-                    "inference_time": elapsed,
-                    "tokens_per_second": tokens / elapsed if elapsed else 0
-                }
-                yield chunk
-                if chunk.get("done"):
-                    self.logger.info(f"Streaming completed after {tokens} tokens in {elapsed:.2f} seconds")
-                    break
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Failed to parse streaming response: {e}")
-                continue
+        # Return single result or list based on input type
+        if is_single:
+            return results[0]
+        return results
 
     def get_model_metrics(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """

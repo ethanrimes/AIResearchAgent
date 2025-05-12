@@ -1,11 +1,13 @@
 import pytest
-import os
-import requests
 import sys
-import logging
 
 # Add the root directory to Python path
 sys.path.append('/')
+
+import os
+import requests
+import logging
+
 
 @pytest.fixture(autouse=True)
 def require_ollama_url():

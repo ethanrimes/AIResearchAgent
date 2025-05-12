@@ -25,6 +25,8 @@ class AgentConfig:
     _config_file: ClassVar[Optional[Path]] = None
     _dataset_path: ClassVar[Optional[str]] = None
     _reasoner_model: ClassVar[Optional[str]] = None
+    _batch_size: ClassVar[int] = 4  # Default batch size
+    _max_num_predict: ClassVar[int] = 2048  # Default max tokens to generate
     _full_config: ClassVar[Dict[str, Any]] = {}
     _initialized: ClassVar[bool] = False
     _locked: ClassVar[bool] = False
@@ -57,12 +59,17 @@ class AgentConfig:
             # Extract specific values of interest
             cls._dataset_path = config.get("dataset_path")
             cls._reasoner_model = config.get("reasoner_model")
+            cls._batch_size = config.get("batch_size", 4)  # Default to 4 if not specified
+            cls._max_num_predict = config.get("max_num_predict", 2048)  # Default to 2048 if not specified
             
             # Write config to a file that can be accessed by subprocesses
             cls._write_config_to_file()
             
             cls._initialized = True
-            logger.info(f"Loaded configuration with dataset_path={cls._dataset_path}, reasoner_model={cls._reasoner_model}")
+            logger.info(f"Loaded configuration with dataset_path={cls._dataset_path}, "
+                        f"reasoner_model={cls._reasoner_model}, "
+                        f"batch_size={cls._batch_size}, "
+                        f"max_num_predict={cls._max_num_predict}")
             return config
             
         except Exception as e:
@@ -80,6 +87,8 @@ class AgentConfig:
             config_data = {
                 "dataset_path": cls._dataset_path,
                 "reasoner_model": cls._reasoner_model,
+                "batch_size": cls._batch_size,
+                "max_num_predict": cls._max_num_predict,
                 "full_config": cls._full_config
             }
             
@@ -107,10 +116,15 @@ class AgentConfig:
             
             cls._dataset_path = config_data.get("dataset_path")
             cls._reasoner_model = config_data.get("reasoner_model")
+            cls._batch_size = config_data.get("batch_size", 4)
+            cls._max_num_predict = config_data.get("max_num_predict", 2048)
             cls._full_config = config_data.get("full_config", {})
             cls._initialized = True
             
-            logger.info(f"Loaded configuration from file with dataset_path={cls._dataset_path}, reasoner_model={cls._reasoner_model}")
+            logger.info(f"Loaded configuration from file with dataset_path={cls._dataset_path}, "
+                        f"reasoner_model={cls._reasoner_model}, "
+                        f"batch_size={cls._batch_size}, "
+                        f"max_num_predict={cls._max_num_predict}")
             return True
         except Exception as e:
             logger.error(f"Error loading configuration from file: {e}")
@@ -130,12 +144,31 @@ class AgentConfig:
             # Look for environment variables as fallback
             env_model = os.environ.get("REASONER_MODEL")
             env_dataset = os.environ.get("DATASET_PATH")
+            env_batch_size = os.environ.get("BATCH_SIZE")
+            env_max_num_predict = os.environ.get("MAX_NUM_PREDICT")
             
-            if env_model or env_dataset:
+            if any([env_model, env_dataset, env_batch_size, env_max_num_predict]):
                 cls._reasoner_model = env_model
                 cls._dataset_path = env_dataset
+                
+                if env_batch_size:
+                    try:
+                        cls._batch_size = int(env_batch_size)
+                    except ValueError:
+                        logger.warning(f"Invalid BATCH_SIZE environment variable: {env_batch_size}, using default: 4")
+                
+                if env_max_num_predict:
+                    try:
+                        cls._max_num_predict = int(env_max_num_predict)
+                    except ValueError:
+                        logger.warning(f"Invalid MAX_NUM_PREDICT environment variable: {env_max_num_predict}, using default: 2048")
+                
                 cls._initialized = True
-                logger.info(f"Loaded configuration from environment variables: dataset_path={cls._dataset_path}, reasoner_model={cls._reasoner_model}")
+                logger.info(f"Loaded configuration from environment variables: "
+                            f"dataset_path={cls._dataset_path}, "
+                            f"reasoner_model={cls._reasoner_model}, "
+                            f"batch_size={cls._batch_size}, "
+                            f"max_num_predict={cls._max_num_predict}")
                 return
                 
             logger.warning("Could not initialize configuration from any source")
@@ -166,6 +199,18 @@ class AgentConfig:
         """Get the reasoner model from configuration."""
         cls.ensure_initialized()
         return cls._reasoner_model
+    
+    @classmethod
+    def batch_size(cls) -> int:
+        """Get the batch size for parallel processing."""
+        cls.ensure_initialized()
+        return cls._batch_size
+    
+    @classmethod
+    def max_num_predict(cls) -> int:
+        """Get the maximum number of tokens to generate per request."""
+        cls.ensure_initialized()
+        return cls._max_num_predict
     
     @classmethod
     def config_file(cls) -> Optional[Path]:
