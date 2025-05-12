@@ -73,12 +73,19 @@ class AgentConfig:
     def dataset_path(self) -> Optional[str]:
         """Get the absolute dataset path from configuration."""
         if self._dataset_path is None:
-            logger.warning("dataset_path is not set in configuration")
+            logger.error("dataset_path is not set in configuration")
             return None
             
         # Return absolute path
         if not Path(self._dataset_path).is_absolute():
-            return str(Path("/data") / self._dataset_path)
+            # Remove 'data/' prefix if it exists
+            path_str = self._dataset_path
+            if path_str.startswith("data/"):
+                path_str = path_str[5:]  # Remove the 'data/' prefix
+            
+            # Add /data prefix
+            return str(Path("/data") / path_str)
+        
         return self._dataset_path
     
     @property

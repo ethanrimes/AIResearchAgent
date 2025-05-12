@@ -19,7 +19,7 @@ def run_additional_tests(agent):
     # Run the dataloader test
     logger.info("Running dataloader test")
     try:
-        test_result = pytest.main(["-v", str(test_dir / "test_dataloader.py")])
+        test_result = pytest.main(["-v", "-p", "no:cacheprovider", str(test_dir / "test_dataloader.py")])
         if test_result != 0:
             logger.warning("Dataloader test failed with exit code: %d", test_result)
         else:
@@ -30,7 +30,7 @@ def run_additional_tests(agent):
     # Run the reasoner model test
     logger.info("Running reasoner model test")
     try:
-        test_result = pytest.main(["-v", str(test_dir / "test_reasoner_model.py")])
+        test_result = pytest.main(["-v", "-p", "no:cacheprovider", str(test_dir / "test_reasoner_model.py")])
         if test_result != 0:
             logger.warning("Reasoner model test failed with exit code: %d", test_result)
         else:
@@ -41,7 +41,7 @@ def run_additional_tests(agent):
     # Run the answer evaluation test
     logger.info("Running answer evaluation test")
     try:
-        test_result = pytest.main(["-v", str(test_dir / "test_answer_evaluation.py")])
+        test_result = pytest.main(["-v", "-p", "no:cacheprovider", str(test_dir / "test_answer_evaluation.py")])
         if test_result != 0:
             logger.warning("Answer evaluation test failed with exit code: %d", test_result)
         else:

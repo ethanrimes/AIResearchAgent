@@ -25,19 +25,21 @@ rm -f "$STDOUT_PIPE" "$STDERR_PIPE"
 # Create the named pipes
 mkfifo "$STDOUT_PIPE" "$STDERR_PIPE"
 
-# Start tee processes to capture output
-tee -a "$CONTAINER_LOG" < "$STDOUT_PIPE" &
-STDOUT_TEE_PID=$!
-tee -a "$CONTAINER_LOG" < "$STDERR_PIPE" >&2 &
-STDERR_TEE_PID=$!
+# Start tee processes to capture output AND display on console
+# Instead of backgrounding the tee commands with &, we use cat to read from 
+# the pipes and pipe that to tee, which will write to both the file and stdout/stderr
+cat "$STDOUT_PIPE" | tee -a "$CONTAINER_LOG" &
+STDOUT_CAT_PID=$!
+cat "$STDERR_PIPE" | tee -a "$CONTAINER_LOG" >&2 &
+STDERR_CAT_PID=$!
 
 # Redirect script output to pipes
 exec > "$STDOUT_PIPE" 2> "$STDERR_PIPE"
 
 # Set up cleanup on exit
-trap 'rm -f "$STDOUT_PIPE" "$STDERR_PIPE"; kill $STDOUT_TEE_PID $STDERR_TEE_PID 2>/dev/null' EXIT
+trap 'rm -f "$STDOUT_PIPE" "$STDERR_PIPE"; kill $STDOUT_CAT_PID $STDERR_CAT_PID 2>/dev/null' EXIT
 
-echo "Logging container output to $CONTAINER_LOG"
+echo "Logging container output to $CONTAINER_LOG and to console"
 
 # -------------------------------------------------
 # 0.  Read environment variables and config file

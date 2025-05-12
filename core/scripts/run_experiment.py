@@ -49,7 +49,9 @@ def main():
     
     try:
         # Set up logging directly with root paths
-        logger = setup_logging(run_dir=Path("/logs"))
+        from pathlib import Path
+        log_path = Path("/logs")
+        logger = setup_logging(run_dir=log_path)
         
         # Log startup information
         logger.info("Starting AI Research Agent")
@@ -107,12 +109,17 @@ def main():
         # Run additional component tests after agent initialization
         logger.info("Running additional component tests")
         try:
-            from app.infra.docker.integration_tests.run_integration_tests import run_additional_tests
+            # Add the integration_tests directory to the path
+            import sys
+            from pathlib import Path
+            integration_tests_dir = Path("/app/infra/docker/integration_tests")
+            sys.path.append(str(integration_tests_dir))
+            
+            # Now import the module directly
+            from run_integration_tests import run_additional_tests
             run_additional_tests(agent)
-        except ImportError:
-            logger.warning("Could not import run_additional_tests module, skipping additional tests")
-        except Exception as e:
-            logger.error(f"Error running additional tests: {e}")
+        except ImportError as e:
+            logger.warning(f"Could not import run_additional_tests module: {e}, skipping additional tests")
 
         # Run the agent
         logger.info("Starting agent execution")
@@ -137,9 +144,11 @@ def main():
         return 0
         
     except Exception as e:
+        from pathlib import Path
+        log_path = Path("/logs")
         # If an exception occurs before logging is set up, set it up now
         if not logging.getLogger().handlers:
-            logger = setup_logging(run_dir=Path("/logs"))
+            logger = setup_logging(run_dir=log_path)
         logger.exception(f"Unhandled exception: {e}")
         return 1
 

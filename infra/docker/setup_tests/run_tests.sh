@@ -9,6 +9,6 @@ echo "Running tests with verbose output: $@"
 
 # Run pytest with verbose output against the specified test files
 # "$@" passes all arguments from the command line to pytest
-python -m pytest -v --no-cache-dir "$@"
+python -m pytest -p no:cacheprovider -v "$@"
 
 echo "✓ all setup tests passed"
