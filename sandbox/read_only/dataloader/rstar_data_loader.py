@@ -42,7 +42,7 @@ class rStarDataLoader:
             # Set an appropriate log level
             self.logger.setLevel(logging.INFO)
             
-            # Create console handler that logs to stderr
+            # Create console handler that logs to stdout
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setLevel(logging.INFO)
             

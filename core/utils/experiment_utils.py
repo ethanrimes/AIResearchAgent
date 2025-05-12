@@ -284,67 +284,71 @@ def format_experiment_prompt(
     """
     logger = logging.getLogger("ai_research_agent.experiment_utils")
     
-    if iteration == 0:
-        # Initial prompt for iteration 0
-        prompt_parts = [
-            f"# Directive\n{directive}\n\n",
-            f"# Iteration\n{iteration}\n\n"
-        ]
+    # Create the shared base prompt (for all iterations)
+    prompt_parts = [
+        f"# Directive\n{directive}\n\n",
+        f"# Iteration\n{iteration}\n\n"
+    ]
+    
+    # Add experiment plan if available
+    if plan_data:
+        experiment_plan = plan_data.get("experiment_plan", {})
+        implementation_plan = plan_data.get("implementation_plan", {})
         
-        # Add experiment plan if available
-        if plan_data:
-            experiment_plan = plan_data.get("experiment_plan", {})
-            implementation_plan = plan_data.get("implementation_plan", {})
-            
-            prompt_parts.append(f"# Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n")
-            prompt_parts.append(f"# Implementation Plan\n```json\n{json.dumps(implementation_plan, indent=2)}\n```\n\n")
-        
-        # Add hypotheses if available
-        hypotheses_file = Path("/hypothesis/hypotheses.json")
-        if hypotheses_file.exists():
-            try:
-                hypotheses_content = json.loads(hypotheses_file.read_text())
-                prompt_parts.append(f"# Hypotheses\n```json\n{json.dumps(hypotheses_content, indent=2)}\n```\n\n")
-            except Exception as e:
-                logger.error(f"Error reading hypotheses file: {e}")
-        
-        # Add API documentation
-        api_doc_file = Path("/read_only/api.md")
-        if api_doc_file.exists():
-            try:
-                api_docs = api_doc_file.read_text()
-                prompt_parts.append(f"# API Documentation\n# These are the APIs which must be used for data loader, model client, answer extraction and evaluation\n{api_docs}\n\n")
-            except Exception as e:
-                logger.error(f"Error reading API documentation: {e}")
-        
-        # Add experiment directory information
-        prompt_parts.append(f"# Experiment Code Directory\n{experiment_dir}\n\n")
-        
-        # Add entry point information
-        prompt_parts.append(f"# Entry Point\n{entry_script}\n\n")
-        
-        # Add instructions for implementation
-        prompt_parts.append(
-            "# Task\n"
-            "Implement the experiment according to the plan. Create all required files in the experiment directory.\n"
-            f"Create a bash script at '/experiment/{entry_script}' (absolute path) that will run the experiment and output results to '/results/results_summary.json (absolute path)'.\n"
-            "The experiment must implement all hypotheses and include a baseline calculation for comparison.\n\n"
-        )
-        
-    else:
-        # Prompt for subsequent iterations
-        prompt_parts = [
-            f"# Directive\n{directive}\n\n",
-            f"# Iteration\n{iteration}\n\n"
-        ]
-        
+        prompt_parts.append(f"# Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n")
+        prompt_parts.append(f"# Implementation Plan\n```json\n{json.dumps(implementation_plan, indent=2)}\n```\n\n")
+    
+    # Add hypotheses if available
+    hypotheses_file = Path("/hypothesis/hypotheses.json")
+    if hypotheses_file.exists():
+        try:
+            hypotheses_content = json.loads(hypotheses_file.read_text())
+            prompt_parts.append(f"# Hypotheses\n```json\n{json.dumps(hypotheses_content, indent=2)}\n```\n\n")
+        except Exception as e:
+            logger.error(f"Error reading hypotheses file: {e}")
+    
+    # Add API documentation
+    api_doc_file = Path("/read_only/api.md")
+    if api_doc_file.exists():
+        try:
+            api_docs = api_doc_file.read_text()
+            prompt_parts.append(f"# API Documentation\n# These are the APIs which must be used for data loader, model client, answer extraction and evaluation\n{api_docs}\n\n")
+        except Exception as e:
+            logger.error(f"Error reading API documentation: {e}")
+    
+    # Add experiment directory information
+    prompt_parts.append(f"# Experiment Code Directory\n{experiment_dir}\n\n")
+    
+    # Add entry point information
+    prompt_parts.append(f"# Entry Point\n{entry_script}\n\n")
+    
+    # Add current code (for all iterations - may be empty for iteration 0)
+    current_code = get_current_experiment_code(experiment_dir)
+    prompt_parts.append(f"# Current Experiment Code\n{current_code}\n\n")
+    
+    # Add task details
+    prompt_parts.append(
+        "# Task\n"
+        "Implement the experiment according to the plan. Create all required files in the experiment directory.\n"
+        f"- Create a bash script at '/experiment/{entry_script}' (absolute path) that will run the experiment.\n"
+        "- The experiment must output results to '/results/results_summary.json' (absolute path).\n"
+        "- The experiment must implement all hypotheses and include a baseline calculation for comparison.\n\n"
+    )
+    
+    # Add environment constraints
+    prompt_parts.append(
+        "# Environment Constraints\n"
+        "- The LLM used in this experiment has a context window of 32768 tokens. Ensure enough generated tokens before termination or the LLM may not generate a final answer.\n"
+        "- The runtime environment has limited computational resources and memory\n"
+        "- Consider these constraints when designing and optimizing your implementation\n"
+        "- Inform the reasoner model that it must wrap final answers inside of \\boxed{{}}\n\n"
+    )
+    
+    # For iterations > 0, append additional information
+    if iteration > 0:
         # Add previous output if available
         if previous_output:
             prompt_parts.append(f"# Previous Output\n{previous_output}\n\n")
-        
-        # Add current experiment code
-        current_code = get_current_experiment_code(experiment_dir)
-        prompt_parts.append(f"# Current Experiment Code\n{current_code}\n\n")
         
         # Add error information if available
         if error_information:
@@ -376,15 +380,16 @@ def format_experiment_prompt(
             # Add bash output if available
             if validation_results.get('bash_output'):
                 prompt_parts.append(f"# Bash Output\n```\n{validation_results.get('bash_output')}\n```\n\n")
-        
-        # Add task instructions for this iteration
-        prompt_parts.append(
-            "# Task\n"
-            "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
-            f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
-        )
+            
+            # Add updated task instructions for this iteration
+            prompt_parts.append(
+                "# Iteration Task\n"
+                "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
+                f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
+            )
     
     return "".join(prompt_parts)
+
 
 # ------------------------------------------------------------------
 # Helper method for logging validation results

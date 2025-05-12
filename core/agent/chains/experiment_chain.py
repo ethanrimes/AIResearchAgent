@@ -270,7 +270,7 @@ class ExperimentChain:
                 directive=self.directive,
                 experiment_dir=self.exp_dir,
                 entry_script=self.ENTRY_SCRIPT,
-                plan_data=plan_data if current_iteration == 0 else None,
+                plan_data=plan_data,
                 previous_output=previous_output,
                 error_information=error_information,
                 type_check_results=type_check_results,

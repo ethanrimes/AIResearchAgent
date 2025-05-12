@@ -122,6 +122,9 @@ def setup_module_logger(logger_name: str) -> logging.Logger:
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False
         
+        # Configure httpx logger to suppress INFO level messages
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        
         logger.debug(f"Logger {logger_name} has been configured")
     
     return logger
