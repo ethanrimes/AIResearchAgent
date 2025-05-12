@@ -101,11 +101,19 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
     # Use the timeout value from the RunBashTool instance if available
     if run_bash_tool and validation_results["entry_script_exists"] and validation_results["python_files_exist"]:
         try:
-            logger.info(f"Executing bash script: {entry_script_path}")
+            # Add a wide log statement spanning the width before running the bash tool
+            logger.info("=" * 100)
+            logger.info(f"EXECUTING EXPERIMENT SCRIPT: {entry_script_path}")
+            logger.info("=" * 100)
+            
             # The RunBashTool._run method now handles the timeout from the tool instance
             bash_output = run_bash_tool._run(command=f"bash {entry_script_path}")
             validation_results["bash_output"] = bash_output
-            logger.info(f"Bash script execution completed")
+            
+            # Add another wide log statement after execution
+            logger.info("=" * 100)
+            logger.info("BASH SCRIPT EXECUTION COMPLETED")
+            logger.info("=" * 100)
         except Exception as e:
             error_msg = f"Error executing bash script: {str(e)}"
             logger.error(error_msg)
@@ -121,7 +129,6 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
     
     logger.info(f"Validation results: {validation_results}")
     return validation_results
-
 
 def update_memory_with_steps(memory, steps_in_memory, agent_output):
     """
@@ -320,7 +327,7 @@ def format_experiment_prompt(
         prompt_parts.append(
             "# Task\n"
             "Implement the experiment according to the plan. Create all required files in the experiment directory.\n"
-            f"Create a bash script called '{entry_script}' that will run the experiment and output results to '/results/results_summary.json'.\n"
+            f"Create a bash script at '/experiment/{entry_script}' (absolute path) that will run the experiment and output results to '/results/results_summary.json (absolute path)'.\n"
             "The experiment must implement all hypotheses and include a baseline calculation for comparison.\n\n"
         )
         

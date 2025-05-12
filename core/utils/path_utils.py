@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Union
 import logging
+import sys
 
 def get_active_run_path():
     """
@@ -82,3 +83,40 @@ def get_active_run_timestamp() -> str:
         str: Active run timestamp.
     """
     return get_run_timestamp_from_path(get_active_run_path())
+
+
+def get_python_path() -> str:
+    """
+    Returns a properly formatted PYTHONPATH environment variable string that includes
+    the standard directories needed for AI Research Agent tools.
+    
+    Returns:
+        str: PYTHONPATH string with experiment and read_only directories
+    """
+    logger = logging.getLogger("ai_research_agent.path_utils")
+    
+    # Start with the current Python path
+    current_path = ":".join(sys.path)
+    
+    # Standard directories to include
+    standard_dirs = ["/experiment", "/read_only"]
+    
+    # Check which directories exist
+    dirs_to_add = [dir_path for dir_path in standard_dirs if Path(dir_path).exists()]
+    
+    if dirs_to_add:
+        logger.info(f"Adding directories to PYTHONPATH: {', '.join(dirs_to_add)}")
+        # Create a path string with the directories that exist
+        path_addition = ":".join(dirs_to_add)
+        
+        # Combine with current path if it exists
+        if current_path:
+            python_path = f"{path_addition}:{current_path}"
+        else:
+            python_path = path_addition
+            
+        logger.info(f"Configured PYTHONPATH: {python_path}")
+        return python_path
+    else:
+        logger.warning("No standard directories found to add to PYTHONPATH")
+        return current_path

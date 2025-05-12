@@ -1,3 +1,5 @@
+# core/agent/tools/run_code.py
+
 """
 Tool for running Python code snippets in a safe environment.
 """
@@ -6,16 +8,17 @@ import logging
 import subprocess
 import sys
 import traceback
+import os
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from typing import Type, ClassVar
 
-
 from pydantic import Field
 from langchain.tools import BaseTool
 
-from core.agent.schemas.tool_schemas import RunCodeInput  # NEW
+from core.agent.schemas.tool_schemas import RunCodeInput
+from core.utils.path_utils import get_python_path
 
 
 class RunCodeTool(BaseTool):
@@ -56,6 +59,11 @@ class RunCodeTool(BaseTool):
                 script_path.write_text(code, encoding="utf-8")
                 self.logger.info(f"Created temporary script at {script_path}")
 
+                # Set up environment with PYTHONPATH
+                env = os.environ.copy()
+                env["PYTHONPATH"] = get_python_path()
+                self.logger.info(f"Set PYTHONPATH environment variable: {env['PYTHONPATH']}")
+
                 with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
                     result = subprocess.run(
                         [sys.executable, str(script_path)],
@@ -63,6 +71,7 @@ class RunCodeTool(BaseTool):
                         stderr=subprocess.PIPE,
                         timeout=self.max_execution_time,
                         text=True,
+                        env=env,
                     )
                     stdout_buf.write(result.stdout)
                     stderr_buf.write(result.stderr)

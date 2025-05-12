@@ -9,49 +9,18 @@ This package contains three utility modules that together form a tiny "LLM + Mat
 | `rstar_data_loader.py` | Minimal loader for math-problem datasets stored as JSON. | `rStarDataLoader` |
 | `answer_evaluation.py` | Tools to extract and score answers produced by an LLM. | `AnswerEvaluator` |
 
-Both `OllamaClient` and `rStarDataLoader` are designed to be **configuration-driven**. All configuration parameters that influence external resources (model name, server URL, dataset path) are managed through a centralized `AgentConfig` class singleton and cannot be directly specified when instantiating these classes. **IMPORTANT: Client code using these classes cannot override the model name, dataset path, or other core configuration values once they are set in the `AgentConfig` class.**
+Both `OllamaClient` and `rStarDataLoader` are designed to be **configuration-driven**. Core configuration parameters like model name, server URL, and dataset path are managed internally and cannot be directly modified when instantiating these classes.
 
-## Import Instructions
+## 2. Import Instructions
 
 To import these modules from the `/read_only` directory in your experiment code:
 
 ```python
-import sys; sys.path.append('/read_only')
-
 # Now you can import the modules directly
 from dataloader.rstar_data_loader import rStarDataLoader
 from models.ollama_client import OllamaClient, GenerationParameters
 from evaluator.answer_evaluation import AnswerEvaluator
 ```
-
----
-
-## 2. Configuration System
-
-The system uses a centralized configuration pattern where critical settings are managed through the `AgentConfig` class singleton:
-
-```python
-from core.agent.agent_config import AgentConfig
-
-# Load configuration (should be done early in the application lifecycle)
-# This only needs to be called once in the main application entry point
-config_dict = AgentConfig.load_config("path/to/config.yaml")
-
-# Later, access configuration properties using class methods
-model_name = AgentConfig.reasoner_model()
-dataset_path = AgentConfig.dataset_path()
-batch_size = AgentConfig.config().get("batch_size", 4)  # Default is 4
-max_num_predict = AgentConfig.config().get("max_num_predict", 2048)  # Default is 2048
-
-# You can also lock the configuration to prevent further modifications
-AgentConfig.lock()
-```
-
-**Important**: 
-- `AgentConfig` is implemented as a singleton with class methods, not instance methods.
-- Clients using these modules cannot directly set the model name, dataset path, batch size, or max token count at instantiation time.
-- These values must be configured through the `AgentConfig` system before creating instances.
-- Once the configuration is loaded and locked, it cannot be modified by client code.
 
 ---
 
@@ -90,8 +59,8 @@ client = OllamaClient()
 ```
 
 Constructor behavior:
-* Gets the model name from `AgentConfig.reasoner_model()`
-* Gets the batch size and max_num_predict from `AgentConfig.config()`
+* Gets the model name from internal configuration
+* Gets the batch size and max_num_predict from internal configuration
 * Uses `OLLAMA_BASE_URL` environment variable (default: `"http://host.docker.internal:11434"`) for the base URL
 * Immediately performs `GET <base_url>/api/tags` to ensure the server is alive
 * After construction the attributes `_base_url`, `_default_model`, `_batch_size`, and `_max_num_predict` become **read-only**; any attempt to overwrite them raises `AttributeError`
@@ -132,10 +101,9 @@ All responses include:
 ```python
 from models.ollama_client import OllamaClient, GenerationParameters
 
-# Note: AgentConfig should be configured before creating the client
-client = OllamaClient()              # Uses model from AgentConfig.reasoner_model()
+client = OllamaClient()              # Uses model from internal configuration
 params = GenerationParameters(
-    model="ignored",                 # Value is ignored and replaced with AgentConfig.reasoner_model()
+    model="ignored",                 # Value is ignored and replaced with configured model
     prompt="Solve 2+2",
     temperature=0
 )
@@ -148,7 +116,7 @@ print(resp["response"])              # 4
 ```python
 from models.ollama_client import OllamaClient, GenerationParameters
 
-client = OllamaClient()              # Uses model, batch_size, and max_num_predict from AgentConfig
+client = OllamaClient()              # Uses model, batch_size, and max_num_predict from internal configuration
 
 # Create a list of parameter objects
 params_list = [
@@ -201,7 +169,7 @@ loader = rStarDataLoader()
 problems: list[dict] = loader.load()
 ```
 
-* Gets the dataset path from `AgentConfig.dataset_path()`
+* Gets the dataset path from internal configuration
 * Reads the file at the configured dataset path (expects a JSON list of objects)
 * Converts each item to the canonical schema:
 
@@ -226,12 +194,8 @@ problems: list[dict] = loader.load()
 ##### Example
 ```python
 from dataloader.rstar_data_loader import rStarDataLoader
-from core.agent.agent_config import AgentConfig
 
-# Configure dataset path in the centralized config
-# This should be done before creating the loader
-AgentConfig.load_config("path/to/config.yaml")
-
+# Configuration should be set up before creating the loader
 loader = rStarDataLoader()
 dataset = loader.load()
 first = dataset[0]
@@ -249,7 +213,7 @@ evaluator = AnswerEvaluator()
 extracted, correct = evaluator.evaluate(generation, ground_truth)
 ```
 
-*Note: Unlike the other modules, `AnswerEvaluator` does not depend on `AgentConfig`.*
+*Note: Unlike the other modules, `AnswerEvaluator` does not depend on internal configuration.*
 
 ##### Core API
 | Method | Purpose |
@@ -298,17 +262,9 @@ print(ok)           # -> True
 ### Example: Processing a Dataset with Batching
 
 ```python
-import sys; sys.path.append('/read_only')
-
 from models.ollama_client import OllamaClient, GenerationParameters
 from dataloader.rstar_data_loader import rStarDataLoader
 from evaluator.answer_evaluation import AnswerEvaluator
-from core.agent.agent_config import AgentConfig
-
-# 0. Ensure configuration is properly set up
-# This should be done once at the start of your program
-config_dict = AgentConfig.load_config("/path/to/config.yaml")
-# Make sure batch_size and max_num_predict are set in the config
 
 # 1. Load problems
 problems = rStarDataLoader().load()
@@ -361,17 +317,12 @@ print(f"Average inference time: {avg_inference_time:.2f}s")
 
 ```python
 import asyncio
-import sys; sys.path.append('/read_only')
 
 from models.ollama_client import OllamaClient, GenerationParameters
 from dataloader.rstar_data_loader import rStarDataLoader
 from evaluator.answer_evaluation import AnswerEvaluator
-from core.agent.agent_config import AgentConfig
 
 async def process_dataset():
-    # 0. Configure system
-    config_dict = AgentConfig.load_config("/path/to/config.yaml")
-    
     # 1. Load problems
     problems = rStarDataLoader().load()[:20]  # First 20 problems
     

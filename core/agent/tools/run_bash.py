@@ -1,3 +1,5 @@
+# core/agent/tools/run_bash.py
+
 import logging
 import os
 import subprocess
@@ -8,7 +10,8 @@ from typing import Optional, Type, ClassVar
 from pydantic import Field
 from langchain.tools import BaseTool
 
-from core.agent.schemas.tool_schemas import RunBashInput  
+from core.agent.schemas.tool_schemas import RunBashInput
+from core.utils.path_utils import get_python_path
 
 
 class RunBashTool(BaseTool):
@@ -64,6 +67,10 @@ class RunBashTool(BaseTool):
             env = os.environ.copy()
             if self.output_dir:
                 env["OUTPUT_DIR"] = str(self.output_dir)
+            
+            # Add Python path
+            env["PYTHONPATH"] = get_python_path()
+            self.logger.info(f"Set PYTHONPATH environment variable: {env['PYTHONPATH']}")
 
             proc = subprocess.Popen(
                 command,
