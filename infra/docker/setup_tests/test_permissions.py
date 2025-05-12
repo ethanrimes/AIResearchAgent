@@ -1,6 +1,6 @@
 # infra/docker/setup_tests/test_permissions.py
-import os
 import pytest
+import os
 
 def test_read_only_dir_unwritable():
     ro = "/read_only"

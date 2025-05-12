@@ -58,6 +58,7 @@ class ExperimentChain:
         max_iterations: int = 10,
         critique_chain = None,
         memory_window_size: int = 0,
+        bash_timeout: int = 600,
     ):
         self.llm = llm
         self.workspace = workspace
@@ -66,6 +67,7 @@ class ExperimentChain:
         self.active_run_path = str(workspace["writable"])
         self.critique_chain = critique_chain  # Store the critique chain
         self.memory_window_size = memory_window_size  # Store the memory window size
+        self.bash_timeout = bash_timeout  # Store the bash timeout
 
         # Initialize memory with the configured window size
         # If memory_window_size is 0, this will still work but won't retain any history
@@ -93,10 +95,11 @@ class ExperimentChain:
         self.agent = self._init_agent()
 
         self.logger.info(
-            "ExperimentChain initialised (max_iterations=%s, critique_chain=%s, memory_window_size=%s)", 
+            "ExperimentChain initialised (max_iterations=%s, critique_chain=%s, memory_window_size=%s, bash_timeout=%s)", 
             self.max_iterations, 
             "available" if self.critique_chain else "not available",
-            self.memory_window_size
+            self.memory_window_size,
+            self.bash_timeout
         )
 
     # ------------------------------------------------------------------
@@ -137,7 +140,9 @@ class ExperimentChain:
         )
 
         self.run_bash_tool = RunBashTool(
-            working_dir="/experiment", output_dir="/results"
+            working_dir="/experiment", 
+            output_dir="/results",
+            timeout=self.bash_timeout
         )
 
         run_code_tool = RunCodeTool()

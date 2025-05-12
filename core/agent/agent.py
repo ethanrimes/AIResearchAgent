@@ -46,11 +46,11 @@ class Agent:
         self.logger = logging.getLogger("ai_research_agent.agent")
         
         # Initialize the global configuration registry
-        config_registry = AgentConfig()
-        self.config = config_registry.load_config(config_path)
+        # Load the configuration first
+        self.config = AgentConfig.load_config(config_path)
         
         # Lock the configuration to prevent further modifications
-        config_registry.lock()
+        AgentConfig.lock()
         
         try:
             self.run_id = get_active_run_timestamp()
@@ -69,6 +69,7 @@ class Agent:
         self.logger.info(f"Using agent model: {self.config['agent_model']}")
         self.logger.info(f"Using reasoner model: {self.config['reasoner_model']}")
         self.logger.info(f"Memory window size: {self.config.get('memory_window_size', 0)}")
+        self.logger.info(f"Bash timeout: {self.config.get('bash_timeout', 600)} seconds")
             
     def _setup_workspace(self) -> Dict[str, Path]:
         """
@@ -77,9 +78,8 @@ class Agent:
         Returns:
             Dict containing paths to workspace directories.
         """
-        # Get the dataset path from the config registry
-        config_registry = AgentConfig()
-        dataset_path = config_registry.dataset_path
+        # Get the dataset path from the config class method
+        dataset_path = AgentConfig.dataset_path()
         
         # Set up workspace using direct root paths
         workspace = {
@@ -133,28 +133,31 @@ class Agent:
         """
         directives_base_path = self.config["directives_path"]
         
+        # Get the bash_timeout from config (default to 600 if not set)
+        bash_timeout = self.config.get("bash_timeout", 600)
+        
         # Initialize chains in a specific order to ensure dependencies are available
         # First, initialize chains that don't depend on others
         chains = {
             "hypothesis": HypothesisChain(
                 llm=self.llm,
                 workspace=self.workspace,
-                directive=load_directive(f"{directives_base_path}/hypothesis_chain.yaml")
+                directive=load_directive(f"{directives_base_path}/hypothesis_chain.yaml"),
             ),
             "planner": PlannerChain(
                 llm=self.llm,
                 workspace=self.workspace,
-                directive=load_directive(f"{directives_base_path}/planner_chain.yaml")
+                directive=load_directive(f"{directives_base_path}/planner_chain.yaml"),
             ),
             "evaluator": EvaluatorChain(
                 llm=self.llm,
                 workspace=self.workspace,
-                directive=load_directive(f"{directives_base_path}/evaluator_chain.yaml")
+                directive=load_directive(f"{directives_base_path}/evaluator_chain.yaml"),
             ),
             "critique": CritiqueChain(  # Initialize critique chain before experiment chain
                 llm=self.llm,
                 workspace=self.workspace,
-                directive=load_directive(f"{directives_base_path}/critique_chain.yaml")
+                directive=load_directive(f"{directives_base_path}/critique_chain.yaml"),
             )
         }
         
@@ -165,7 +168,8 @@ class Agent:
             directive=load_directive(f"{directives_base_path}/experiment_chain.yaml"),
             max_iterations=self.config["max_coding_iters"],
             critique_chain=chains["critique"],  # Pass the critique chain
-            memory_window_size=self.config.get("memory_window_size", 0)  # Pass memory window size
+            memory_window_size=self.config.get("memory_window_size", 0),  # Pass memory window size
+            bash_timeout=bash_timeout  # Pass bash timeout
         )
         
         self.logger.info("Agent chains initialized")

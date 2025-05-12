@@ -3,7 +3,8 @@ Main entry point for the AI Research Agent.
 
 This script initializes and runs the agent using the configuration provided.
 """
-
+import pytest
+from core.utils.path_utils import get_active_run_timestamp
 import os
 import sys
 import json
@@ -12,8 +13,8 @@ import logging
 import argparse
 from pathlib import Path
 from datetime import datetime
-from core.utils.path_utils import get_active_run_timestamp
-import pytest
+
+
 
 # Add the project root to the Python path
 project_root = Path(__file__).resolve().parent.parent.parent

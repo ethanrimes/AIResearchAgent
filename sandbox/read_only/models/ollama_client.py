@@ -140,15 +140,15 @@ class OllamaClient:
 
     # ---------- construction & immutability helpers ----------
     def __init__(self) -> None:
-        # Get configuration from the registry
-        config = AgentConfig()
+        # Get configuration from the registry using class method
+        # This properly uses the AgentConfig as a singleton with class methods
         
         # Set base URL from environment with fallback to default
         base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
         
         # Set immutable attributes using object.__setattr__
         object.__setattr__(self, "_base_url", base_url)
-        object.__setattr__(self, "_default_model", config.reasoner_model)
+        object.__setattr__(self, "_default_model", AgentConfig.reasoner_model())
         
         if not self._default_model:
             raise ValueError("Reasoner model not set in configuration")
@@ -286,8 +286,8 @@ class OllamaClient:
 
     # ---------- public API ----------
     def generate(self,
-                 params: Union[GenerationParameters, Dict[str, Any]],
-                 timeout: Optional[float] = None) -> Dict[str, Any]:
+             params: Union[GenerationParameters, Dict[str, Any]],
+             timeout: Optional[float] = None) -> Dict[str, Any]:
         """
         Generate text using the default model.
         
@@ -300,6 +300,11 @@ class OllamaClient:
         """
         data = self._enforce_defaults(params)
         self.logger.debug(f"Generate request with prompt: {data['prompt'][:50]}...")
+        
+        # Log the generation parameters at INFO level
+        self.logger.info(f"Generation parameters: {json.dumps({k: v for k, v in data.items() if k != 'prompt'})}")
+        if 'prompt' in data:
+            self.logger.info(f"Prompt: {data['prompt'][:100]}{'...' if len(data['prompt']) > 100 else ''}")
 
         # Ensure stream parameter is at the top level, not inside options
         is_streaming = False
@@ -339,6 +344,12 @@ class OllamaClient:
             "tokens_per_second": len(resp.get("response", "").split()) / elapsed
                                 if elapsed else 0
         }
+        
+        # Log completed generation info at INFO level
+        response_text = resp.get("response", "")
+        self.logger.info(f"Completed generation: {len(response_text)} chars, metrics: {resp['metrics']}")
+        self.logger.info(f"Response preview: {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
+        
         return resp
 
     def generate_stream(self,

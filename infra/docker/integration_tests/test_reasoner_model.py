@@ -1,11 +1,13 @@
 import pytest
+# Add the root directory to Python path
+sys.path.append('/')
+from read_only.models.ollama_client import OllamaClient, GenerationParameters
 import sys
 import os
 import logging
 
-# Add the root directory to Python path
-sys.path.append('/')
-from read_only.models.ollama_client import OllamaClient, GenerationParameters
+
+
 
 @pytest.fixture
 def client():

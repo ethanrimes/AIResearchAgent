@@ -1,5 +1,5 @@
-import os
 import pytest
+import os
 import openai
 import logging
 

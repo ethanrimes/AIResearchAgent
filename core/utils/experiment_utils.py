@@ -98,10 +98,12 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         validation_results["python_files_exist"] = True
     
     # STEP 3: If we have both entry script and Python files, and run_bash_tool is provided, execute the script
+    # Use the timeout value from the RunBashTool instance if available
     if run_bash_tool and validation_results["entry_script_exists"] and validation_results["python_files_exist"]:
         try:
             logger.info(f"Executing bash script: {entry_script_path}")
-            bash_output = run_bash_tool._run(f"bash {entry_script_path}")
+            # The RunBashTool._run method now handles the timeout from the tool instance
+            bash_output = run_bash_tool._run(command=f"bash {entry_script_path}")
             validation_results["bash_output"] = bash_output
             logger.info(f"Bash script execution completed")
         except Exception as e:

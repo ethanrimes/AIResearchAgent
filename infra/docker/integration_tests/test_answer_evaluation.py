@@ -1,11 +1,13 @@
 import pytest
+# Add the root directory to Python path
+sys.path.append('/')
+from read_only.evaluator.answer_evaluation import AnswerEvaluator
 import sys
 import os
 import logging
 
-# Add the root directory to Python path
-sys.path.append('/')
-from read_only.evaluator.answer_evaluation import AnswerEvaluator
+
+
 
 @pytest.fixture
 def evaluator():

@@ -24,24 +24,28 @@ class RunBashTool(BaseTool):
 
     working_dir: Path = Field(...)
     output_dir: Optional[Path] = None
+    timeout: int = Field(default=600)  # Default timeout of 600 seconds if not provided
     logger: logging.Logger = Field(
         default_factory=lambda: logging.getLogger("ai_research_agent.run_bash"),
         exclude=True,
     )
 
-    def __init__(self, working_dir: str, output_dir: str | None = None):
+    def __init__(self, working_dir: str, output_dir: str | None = None, timeout: int = 600):
         working_dir_path = Path(working_dir).resolve()
         output_dir_path = Path(output_dir).resolve() if output_dir else None
         logger = logging.getLogger("ai_research_agent.run_bash")
         super().__init__(
-            working_dir=working_dir_path, output_dir=output_dir_path, logger=logger
+            working_dir=working_dir_path, output_dir=output_dir_path, 
+            timeout=timeout, logger=logger
         )
         working_dir_path.mkdir(parents=True, exist_ok=True)
         if output_dir_path:
             output_dir_path.mkdir(parents=True, exist_ok=True)
+        
+        self.logger.info(f"Initialized run_bash tool with timeout: {timeout} seconds")
 
     # --------------------------------------------------
-    def _run(self, command: str = None) -> str:
+    def _run(self, command: str = None, timeout: Optional[int] = None) -> str:
         # Log all parameters when tool is called
         params_str = ', '.join([f'{k}={v}' for k, v in locals().items() if k != 'self'])
         self.logger.info(f"Tool {self.name} called with parameters: {params_str}")
@@ -50,9 +54,13 @@ class RunBashTool(BaseTool):
         if command is None:
             self.logger.error("Required parameter 'command' is missing")
             return "ERROR: Required parameter 'command' is missing"
+            
+        # Use the provided timeout if specified, otherwise use the instance timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
+        self.logger.info(f"Using timeout of {effective_timeout} seconds for command execution")
 
         try:
-            self.logger.info("Running bash command: %s", command)
+            self.logger.info(f"Running bash command with timeout {effective_timeout} seconds: {command}")
             env = os.environ.copy()
             if self.output_dir:
                 env["OUTPUT_DIR"] = str(self.output_dir)
@@ -101,15 +109,15 @@ class RunBashTool(BaseTool):
 
             # Wait for process to complete with timeout
             try:
-                rc = proc.wait(timeout=600)
+                rc = proc.wait(timeout=effective_timeout)
                 self.logger.info(f"Command completed with return code: {rc}")
             except subprocess.TimeoutExpired as e:
-                self.logger.error("Command timed out after 600 seconds")
+                self.logger.error(f"Command timed out after {effective_timeout} seconds")
                 proc.kill()
                 # Wait for threads to finish after killing the process
                 stdout_thread.join(timeout=1)
                 stderr_thread.join(timeout=1)
-                return "ERROR: Command timed out after 600 seconds."
+                return f"ERROR: Command timed out after {effective_timeout} seconds."
             
             # Wait for output threads to finish
             stdout_thread.join()
@@ -157,5 +165,5 @@ class RunBashTool(BaseTool):
             self.logger.error(error_msg, exc_info=True)  # Include the full traceback
             return error_msg
 
-    async def _arun(self, command: str) -> str:
-        return self._run(command)
+    async def _arun(self, command: str, timeout: Optional[int] = None) -> str:
+        return self._run(command, timeout)

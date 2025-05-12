@@ -1,6 +1,6 @@
+import pytest
 import os
 import requests
-import pytest
 import sys
 import logging
 

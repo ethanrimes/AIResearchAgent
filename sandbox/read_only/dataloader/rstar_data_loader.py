@@ -15,10 +15,9 @@ class rStarDataLoader:
         """
         Initialize the data loader.
         """
-        # Get configuration from the registry
-        config = AgentConfig()
-        # Store dataset path as private attribute
-        self._dataset_path = config.dataset_path
+        # Get configuration from the registry using class method
+        # This properly uses the AgentConfig as a singleton with class methods
+        self._dataset_path = AgentConfig.dataset_path()
         
         # Set up module-specific logger
         self.logger = logging.getLogger("ai_research_agent.rstar_data_loader")
@@ -43,7 +42,7 @@ class rStarDataLoader:
             self.logger.setLevel(logging.INFO)
             
             # Create console handler that logs to stderr
-            console_handler = logging.StreamHandler(sys.stderr)
+            console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setLevel(logging.INFO)
             
             # Create formatter

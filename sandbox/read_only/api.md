@@ -9,26 +9,47 @@ This package contains three utility modules that together form a tiny "LLM + Mat
 | `rstar_data_loader.py` | Minimal loader for math-problem datasets stored as JSON. | `rStarDataLoader` |
 | `answer_evaluation.py` | Tools to extract and score answers produced by an LLM. | `AnswerEvaluator` |
 
-Both `OllamaClient` and `rStarDataLoader` are designed to be **configuration-driven**. All configuration parameters that influence external resources (model name, server URL, dataset path) are managed through a centralized `AgentConfig` class and cannot be directly specified when instantiating these classes.
+Both `OllamaClient` and `rStarDataLoader` are designed to be **configuration-driven**. All configuration parameters that influence external resources (model name, server URL, dataset path) are managed through a centralized `AgentConfig` class singleton and cannot be directly specified when instantiating these classes. **IMPORTANT: Client code using these classes cannot override the model name, dataset path, or other core configuration values once they are set in the `AgentConfig` class.**
+
+## Import Instructions
+
+To import these modules from the `/read_only` directory in your experiment code:
+
+```python
+import sys; sys.path.append('/read_only')
+
+# Now you can import the modules directly
+from dataloader.rstar_data_loader import rStarDataLoader
+from models.ollama_client import OllamaClient, GenerationParameters
+from evaluator.answer_evaluation import AnswerEvaluator
+```
 
 ---
 
 ## 2. Configuration System
 
-The system uses a centralized configuration pattern where critical settings are managed through the `AgentConfig` class:
+The system uses a centralized configuration pattern where critical settings are managed through the `AgentConfig` class singleton:
 
 ```python
 from core.agent.agent_config import AgentConfig
 
-# Get configuration
-config = AgentConfig()
+# Load configuration (should be done early in the application lifecycle)
+# This only needs to be called once in the main application entry point
+config_dict = AgentConfig.load_config("path/to/config.yaml")
 
-# Access configuration properties
-model_name = config.reasoner_model
-dataset_path = config.dataset_path
+# Later, access configuration properties using class methods
+model_name = AgentConfig.reasoner_model()
+dataset_path = AgentConfig.dataset_path()
+
+# You can also lock the configuration to prevent further modifications
+AgentConfig.lock()
 ```
 
-**Important**: Clients using these modules cannot directly set the model name or dataset path at instantiation time. These values must be configured through the `AgentConfig` system before creating instances.
+**Important**: 
+- `AgentConfig` is implemented as a singleton with class methods, not instance methods.
+- Clients using these modules cannot directly set the model name or dataset path at instantiation time. 
+- These values must be configured through the `AgentConfig` system before creating instances.
+- Once the configuration is loaded and locked, it cannot be modified by client code.
 
 ---
 
@@ -67,7 +88,7 @@ client = OllamaClient()
 ```
 
 Constructor behavior:
-* Gets the model name from `AgentConfig().reasoner_model`
+* Gets the model name from `AgentConfig.reasoner_model()`
 * Uses `OLLAMA_BASE_URL` environment variable (default: `"http://host.docker.internal:11434"`) for the base URL
 * Immediately performs `GET <base_url>/api/tags` to ensure the server is alive
 * After construction the attributes `_base_url` and `_default_model` become **read-only**; any attempt to overwrite them raises `AttributeError`
@@ -98,9 +119,10 @@ Both `generate()` and `generate_stream()` add:
 ```python
 from ollama_client import OllamaClient, GenerationParameters
 
-client = OllamaClient()              # Uses config from AgentConfig
+# Note: AgentConfig should be configured before creating the client
+client = OllamaClient()              # Uses model from AgentConfig.reasoner_model()
 params = GenerationParameters(
-    model="ignored",                 # Value is ignored and replaced with config.reasoner_model
+    model="ignored",                 # Value is ignored and replaced with AgentConfig.reasoner_model()
     prompt="Solve 2+2",
     temperature=0
 )
@@ -120,7 +142,7 @@ loader = rStarDataLoader()
 problems: list[dict] = loader.load()
 ```
 
-* Gets the dataset path from `AgentConfig().dataset_path`
+* Gets the dataset path from `AgentConfig.dataset_path()`
 * Reads the file at the configured dataset path (expects a JSON list of objects)
 * Converts each item to the canonical schema:
 
@@ -148,8 +170,8 @@ from rstar_data_loader import rStarDataLoader
 from core.agent.agent_config import AgentConfig
 
 # Configure dataset path in the centralized config
-config = AgentConfig()
-# Dataset path must be configured before using the loader
+# This should be done before creating the loader
+AgentConfig.load_config("path/to/config.yaml")
 
 loader = rStarDataLoader()
 dataset = loader.load()
@@ -215,14 +237,16 @@ print(ok)           # -> True
 ## 4. Putting It All Together
 
 ```python
-from ollama_client import OllamaClient, GenerationParameters
-from rstar_data_loader import rStarDataLoader
-from answer_evaluation import AnswerEvaluator
+import sys; sys.path.append('/read_only')
+
+from models.ollama_client import OllamaClient, GenerationParameters
+from dataloader.rstar_data_loader import rStarDataLoader
+from evaluator.answer_evaluation import AnswerEvaluator
 from core.agent.agent_config import AgentConfig
 
 # 0. Ensure configuration is properly set up
-config = AgentConfig()
-# Configuration must be set up properly before creating clients
+# This should be done once at the start of your program
+config_dict = AgentConfig.load_config("/path/to/config.yaml")
 
 # 1. Load problems
 problems = rStarDataLoader().load()

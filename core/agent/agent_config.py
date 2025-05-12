@@ -1,42 +1,38 @@
 """
 Centralized configuration manager for AI Research Agent components.
 
-Provides a singleton configuration registry to share configuration values across components
-without relying on environment variables, ensuring immutability once initialized.
+Provides a class-based singleton configuration registry to share configuration values 
+across components without relying on environment variables, ensuring immutability once initialized.
 """
 
 import yaml
+import json
 import logging
-from typing import Dict, Any, Optional
+import os
+from typing import Dict, Any, Optional, ClassVar
 from pathlib import Path
 
 logger = logging.getLogger("ai_research_agent.config")
 
 class AgentConfig:
     """
-    Singleton configuration registry that enforces immutability after initialization.
+    Class-based singleton configuration registry that enforces immutability after initialization.
+    
+    This implementation stores configuration values as class attributes (static variables),
+    making them accessible across all instances and modules that import this class.
     """
-    _instance = None
+    # Class variables for configuration storage
+    _config_file: ClassVar[Optional[Path]] = None
+    _dataset_path: ClassVar[Optional[str]] = None
+    _reasoner_model: ClassVar[Optional[str]] = None
+    _full_config: ClassVar[Dict[str, Any]] = {}
+    _initialized: ClassVar[bool] = False
+    _locked: ClassVar[bool] = False
     
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(AgentConfig, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-    
-    def __init__(self):
-        if not self._initialized:
-            # Initialize with None values
-            self._dataset_path = None
-            self._reasoner_model = None
-            self._config_file = None
-            self._full_config = {}
-            self._locked = False
-            self._initialized = True
-    
-    def load_config(self, config_path: str) -> Dict[str, Any]:
+    @classmethod
+    def load_config(cls, config_path: str) -> Dict[str, Any]:
         """
-        Load configuration from a YAML file and update internal state.
+        Load configuration from a YAML file and update class state.
         
         Args:
             config_path: Path to the configuration file
@@ -44,7 +40,7 @@ class AgentConfig:
         Returns:
             Dict containing the loaded configuration
         """
-        if self._locked:
+        if cls._locked:
             raise RuntimeError("Configuration is locked and cannot be modified")
         
         config_path = Path(config_path)
@@ -55,60 +51,142 @@ class AgentConfig:
                 config = yaml.safe_load(f)
             
             # Store the config file path and full config dictionary
-            self._config_file = config_path
-            self._full_config = config.copy()
+            cls._config_file = config_path
+            cls._full_config = config.copy()
             
             # Extract specific values of interest
-            self._dataset_path = config.get("dataset_path")
-            self._reasoner_model = config.get("reasoner_model")
+            cls._dataset_path = config.get("dataset_path")
+            cls._reasoner_model = config.get("reasoner_model")
             
-            logger.info(f"Loaded configuration with dataset_path={self._dataset_path}, reasoner_model={self._reasoner_model}")
+            # Write config to a file that can be accessed by subprocesses
+            cls._write_config_to_file()
+            
+            cls._initialized = True
+            logger.info(f"Loaded configuration with dataset_path={cls._dataset_path}, reasoner_model={cls._reasoner_model}")
             return config
             
         except Exception as e:
             logger.error(f"Error loading configuration: {e}")
             raise
     
-    @property
-    def dataset_path(self) -> Optional[str]:
+    @classmethod
+    def _write_config_to_file(cls) -> None:
+        """Write the configuration to a JSON file for subprocess access."""
+        try:
+            config_dir = Path("/experiment")
+            config_dir.mkdir(exist_ok=True)
+            config_path = config_dir / "agent_config.json"
+            
+            config_data = {
+                "dataset_path": cls._dataset_path,
+                "reasoner_model": cls._reasoner_model,
+                "full_config": cls._full_config
+            }
+            
+            with open(config_path, 'w') as f:
+                json.dump(config_data, f, indent=2)
+                
+            logger.info(f"Configuration written to {config_path}")
+        except Exception as e:
+            logger.error(f"Error writing configuration file: {e}")
+    
+    @classmethod
+    def _load_from_file(cls) -> bool:
+        """
+        Load configuration from JSON file if it exists.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            config_path = Path("/experiment/agent_config.json")
+            if not config_path.exists():
+                logger.warning("Configuration file not found")
+                return False
+                
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+            
+            cls._dataset_path = config_data.get("dataset_path")
+            cls._reasoner_model = config_data.get("reasoner_model")
+            cls._full_config = config_data.get("full_config", {})
+            cls._initialized = True
+            
+            logger.info(f"Loaded configuration from file with dataset_path={cls._dataset_path}, reasoner_model={cls._reasoner_model}")
+            return True
+        except Exception as e:
+            logger.error(f"Error loading configuration from file: {e}")
+            return False
+    
+    @classmethod
+    def ensure_initialized(cls) -> None:
+        """
+        Ensure the configuration is initialized by checking various sources.
+        This should be called at the start of any component that uses the configuration.
+        """
+        if not cls._initialized:
+            # Try to load from file first
+            if cls._load_from_file():
+                return
+                
+            # Look for environment variables as fallback
+            env_model = os.environ.get("REASONER_MODEL")
+            env_dataset = os.environ.get("DATASET_PATH")
+            
+            if env_model or env_dataset:
+                cls._reasoner_model = env_model
+                cls._dataset_path = env_dataset
+                cls._initialized = True
+                logger.info(f"Loaded configuration from environment variables: dataset_path={cls._dataset_path}, reasoner_model={cls._reasoner_model}")
+                return
+                
+            logger.warning("Could not initialize configuration from any source")
+    
+    @classmethod
+    def dataset_path(cls) -> Optional[str]:
         """Get the absolute dataset path from configuration."""
-        if self._dataset_path is None:
+        cls.ensure_initialized()
+        
+        if cls._dataset_path is None:
             logger.error("dataset_path is not set in configuration")
             return None
             
         # Return absolute path
-        if not Path(self._dataset_path).is_absolute():
+        if not Path(cls._dataset_path).is_absolute():
             # Remove 'data/' prefix if it exists
-            path_str = self._dataset_path
+            path_str = cls._dataset_path
             if path_str.startswith("data/"):
                 path_str = path_str[5:]  # Remove the 'data/' prefix
             
             # Add /data prefix
             return str(Path("/data") / path_str)
         
-        return self._dataset_path
+        return cls._dataset_path
     
-    @property
-    def reasoner_model(self) -> Optional[str]:
+    @classmethod
+    def reasoner_model(cls) -> Optional[str]:
         """Get the reasoner model from configuration."""
-        return self._reasoner_model
+        cls.ensure_initialized()
+        return cls._reasoner_model
     
-    @property
-    def config_file(self) -> Optional[Path]:
+    @classmethod
+    def config_file(cls) -> Optional[Path]:
         """Get the path to the config file."""
-        return self._config_file
+        cls.ensure_initialized()
+        return cls._config_file
     
-    @property
-    def config(self) -> Dict[str, Any]:
+    @classmethod
+    def config(cls) -> Dict[str, Any]:
         """Get the full configuration dictionary."""
-        return self._full_config.copy()  # Return a copy to prevent modification
+        cls.ensure_initialized()
+        return cls._full_config.copy()  # Return a copy to prevent modification
     
-    def lock(self) -> None:
+    @classmethod
+    def lock(cls) -> None:
         """Lock the configuration to prevent further modifications."""
-        self._locked = True
+        cls._locked = True
         logger.info("Configuration is now locked")
     
-    def unlock(self) -> None:
+    @classmethod
+    def unlock(cls) -> None:
         """Unlock the configuration to allow modifications (use with caution)."""
-        self._locked = False
+        cls._locked = False
         logger.info("Configuration is now unlocked")

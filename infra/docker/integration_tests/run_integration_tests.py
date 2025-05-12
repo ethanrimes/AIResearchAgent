@@ -1,6 +1,6 @@
 # File: infra/docker/integration_tests/run_integration_tests.py
-import logging
 import pytest
+import logging
 from pathlib import Path
 
 def run_additional_tests(agent):

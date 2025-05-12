@@ -5,3 +5,4 @@ dataset_path: data/rstar/aime2024_test.json
 memory_window_size: 0
 max_coding_iters: 20
 max_run_duration: 6000
+bash_timeout: 6000

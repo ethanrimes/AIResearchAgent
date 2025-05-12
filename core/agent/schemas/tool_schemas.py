@@ -62,6 +62,7 @@ class ListFilesOutput(BaseModel):
 # ──────────────────────────
 class RunBashInput(BaseModel):
     command: str = Field(..., description="Bash command to execute")
+    timeout: Optional[int] = Field(600, description="Timeout for the bash command in seconds")
 
 
 class RunBashOutput(BaseModel):
