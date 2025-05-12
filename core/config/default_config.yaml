@@ -1,8 +1,14 @@
-agent_model: o4-mini
-reasoner_model: qwen3:0.6b
-directives_path: core/directives/test_time_compute_directives
-dataset_path: data/rstar/aime2024_test.json
-memory_window_size: 0
-max_coding_iters: 20
-max_run_duration: 6000
-bash_timeout: 6000
+## System Configuration
+agent_model: o4-mini    # Model used by the agent for reasoning and planning
+reasoner_model: qwen3:0.6b    # Model used for solving math problems
+directives_path: core/directives/test_time_compute_directives    # Path to agent directives
+
+## Dataset Configuration
+dataset_path: data/rstar/aime2024_test.json    # Path to the dataset file
+max_questions: -1    # Maximum number of questions to load (-1 for all questions)
+
+## Runtime Constraints
+memory_window_size: 0    # Size of memory window for context (0 for unlimited)
+max_coding_iters: 20    # Maximum number of coding iterations
+max_run_duration: 6000    # Maximum runtime in seconds
+bash_timeout: 6000    # Timeout for bash commands in seconds

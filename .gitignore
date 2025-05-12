@@ -16,3 +16,8 @@ sandbox/writable/**/*.log
 
 # Ignore all subdirectories (their contents)
 sandbox/writable/*/
+# Ignore everything in sandbox/writeable
+sandbox/writeable/
+# Extra ignore for specific file types
+sandbox/writeable/*.json
+sandbox/writeable/*.txt

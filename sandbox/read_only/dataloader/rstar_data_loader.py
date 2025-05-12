@@ -18,6 +18,7 @@ class rStarDataLoader:
         # Get configuration from the registry using class method
         # This properly uses the AgentConfig as a singleton with class methods
         self._dataset_path = AgentConfig.dataset_path()
+        self._max_questions = AgentConfig.config().get("max_questions", -1)
         
         # Set up module-specific logger
         self.logger = logging.getLogger("ai_research_agent.rstar_data_loader")
@@ -107,6 +108,11 @@ class rStarDataLoader:
             })
         
         self.logger.info(f"Loaded {len(problems)} problems from dataset")
+        # After loading the problems, filter them if max_questions is set
+        if self._max_questions > 0 and len(problems) > self._max_questions:
+            self.logger.info(f"Limiting to {self._max_questions} problems from the dataset")
+            problems = problems[:self._max_questions]
+            self.logger.info(f"Filtered to {len(problems)} problems")
 
         # Log a few sample problems
         num_samples = min(3, len(problems))
