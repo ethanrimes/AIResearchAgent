@@ -1,13 +1,3 @@
-"""
-Immutable client for text generation with an Ollama server.
-
-All requests are forced to use:
-  • the base-URL chosen at construction time
-  • the default model chosen at construction time
-
-Client code cannot override these settings.
-"""
-
 from __future__ import annotations
 
 import json
@@ -15,11 +5,10 @@ import os
 import sys
 import time
 import logging
-import asyncio
-from typing import Dict, List, Any, Optional, Union, Sequence
+from typing import Dict, List, Any, Optional, Union
 
-import aiohttp
-import requests
+import ollama
+from ollama import Client
 from dataclasses import dataclass
 
 from core.agent.agent_config import AgentConfig
@@ -40,11 +29,12 @@ class GenerationParameters:
     system: Optional[str] = None
     template: Optional[str] = None
     context: Optional[List[int]] = None
-    format: Optional[str] = None
+    stream: bool = False  # This will be forced to False
     raw: bool = False
+    format: Optional[str] = None
 
     # generation options
-    num_predict: Optional[int] = None
+    num_predict: Optional[int] = 32768
     temperature: Optional[float] = None
     top_k: Optional[int] = None
     top_p: Optional[float] = None
@@ -59,27 +49,40 @@ class GenerationParameters:
     tfs_z: Optional[float] = None
     num_gpu: Optional[int] = None
     num_thread: Optional[int] = None
-    num_ctx: Optional[int] = None
+    num_ctx: Optional[int] = 32768
     num_batch: Optional[int] = None
     num_keep: Optional[int] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
-            "prompt": self.prompt,          # model will be injected later
-        }
-        if self.system is not None:     d["system"]   = self.system
-        if self.template is not None:   d["template"] = self.template
-        if self.context is not None:    d["context"]  = self.context
-        if self.raw:                    d["raw"]      = True
-        if self.format is not None:     d["format"]   = self.format
-
-        # collect generation-options (excluding stream which should be top-level)
-        base_fields = set(d.keys()) | {"model", "prompt", "raw"}
-        options = {k: v for k, v in self.__dict__.items()
-                   if k not in base_fields and v is not None}
-        if options:
-            d["options"] = options
-        return d
+    def to_options_dict(self) -> Dict[str, Any]:
+        """Convert generation parameters to an options dictionary for the Ollama client."""
+        options = {}
+        
+        # Add generation options
+        if self.num_predict is not None:    options["num_predict"] = self.num_predict
+        if self.temperature is not None:    options["temperature"] = self.temperature
+        if self.top_k is not None:          options["top_k"] = self.top_k
+        if self.top_p is not None:          options["top_p"] = self.top_p
+        if self.repeat_penalty is not None: options["repeat_penalty"] = self.repeat_penalty
+        if self.presence_penalty is not None: options["presence_penalty"] = self.presence_penalty
+        if self.frequency_penalty is not None: options["frequency_penalty"] = self.frequency_penalty
+        if self.seed is not None:           options["seed"] = self.seed
+        if self.mirostat is not None:       options["mirostat"] = self.mirostat
+        if self.mirostat_tau is not None:   options["mirostat_tau"] = self.mirostat_tau
+        if self.mirostat_eta is not None:   options["mirostat_eta"] = self.mirostat_eta
+        if self.stop is not None:           options["stop"] = self.stop
+        if self.tfs_z is not None:          options["tfs_z"] = self.tfs_z
+        if self.num_gpu is not None:        options["num_gpu"] = self.num_gpu
+        if self.num_thread is not None:     options["num_thread"] = self.num_thread
+        if self.num_ctx is not None:        options["num_ctx"] = self.num_ctx
+        if self.num_batch is not None:      options["num_batch"] = self.num_batch
+        if self.num_keep is not None:       options["num_keep"] = self.num_keep
+        
+        # Add other parameters
+        if self.system is not None:        options["system"] = self.system
+        if self.template is not None:      options["template"] = self.template
+        if self.format is not None:        options["format"] = self.format
+        
+        return options
 
 
 # ---------------------------------------------------------
@@ -135,14 +138,9 @@ class OllamaClient:
     modified from the outside, and every request sent through this client
     will automatically contain these enforced defaults.
     """
-    # Endpoint for generation
-    GENERATE_ENDPOINT = "/api/generate"
 
     # ---------- construction & immutability helpers ----------
     def __init__(self) -> None:
-        # Get configuration from the registry using class method
-        # This properly uses the AgentConfig as a singleton with class methods
-        
         # Set base URL from environment with fallback to default
         base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
         
@@ -150,35 +148,28 @@ class OllamaClient:
         object.__setattr__(self, "_base_url", base_url)
         object.__setattr__(self, "_default_model", AgentConfig.reasoner_model())
         
-        # Get batch size and max num predict from config
-        config = AgentConfig.config()
-        batch_size = config.get("batch_size", 4)  # Default to 4 if not specified
-        max_num_predict = config.get("max_num_predict", 2048)  # Default to 2048 if not specified
-        
-        object.__setattr__(self, "_batch_size", batch_size)
-        object.__setattr__(self, "_max_num_predict", max_num_predict)
-        
         if not self._default_model:
             raise ValueError("Reasoner model not set in configuration")
+        
+        # Configure the Ollama client
+        object.__setattr__(self, "_client", Client(host=base_url))
         
         # Configure module-specific logger
         logger_name = "ai_research_agent.ollama_client"
         object.__setattr__(self, "logger", setup_module_logger(logger_name))
         self.logger.info(f"Initializing OllamaClient with base URL: {self._base_url}")
         self.logger.info(f"Using model from configuration: {self._default_model}")
-        self.logger.info(f"Batch size: {self._batch_size}, Max num predict: {self._max_num_predict}")
 
         # Verify connectivity
         self._check_connection()
 
-        # *freeze* – disallow changes to critical attrs after this point
+        # *freeze* -- disallow changes to critical attrs after this point
         object.__setattr__(self, "_immutable", True)
 
     def __setattr__(self, name: str, value: Any) -> None:
         # prevent external mutation of critical fields once initialized
         if getattr(self, "_immutable", False) and name in {
-            "_base_url", "_default_model", "_batch_size", "_max_num_predict",
-            "base_url", "default_model", "batch_size", "max_num_predict"
+            "_base_url", "_default_model", "base_url", "default_model"
         }:
             raise AttributeError(f"{name} is read-only after initialization.")
         super().__setattr__(name, value)
@@ -191,216 +182,202 @@ class OllamaClient:
     @property
     def default_model(self) -> str:
         return self._default_model
-        
-    @property
-    def batch_size(self) -> int:
-        return self._batch_size
-        
-    @property
-    def max_num_predict(self) -> int:
-        return self._max_num_predict
 
     # ---------- internal helpers ----------
-    def _get_url(self, endpoint: str) -> str:
-        return f"{self._base_url}{endpoint}"
-
     def _check_connection(self) -> None:
         try:
-            # Using a simple GET to check if server is responsive
-            r = requests.get(f"{self._base_url}/api/tags", timeout=5)
-            r.raise_for_status()
-            self.logger.info("Connected to Ollama server at %s", self._base_url)
-        except requests.RequestException as exc:
+            # Get available models to check connectivity
+            models = self._client.list()
+            self.logger.info(f"Connected to Ollama server at {self._base_url}")
+        except Exception as exc:
             self.logger.error(f"Failed to connect to Ollama server: {exc}")
             raise ConnectionError(f"Unable to connect to Ollama at {self._base_url}") from exc
 
-    def _enforce_defaults(self, params: Union[GenerationParameters, Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Convert `params` to a dict and inject the enforced default model and cap num_predict.
-        """
-        if hasattr(params, "to_dict"):
-            data = params.to_dict()            # dataclass instance
-        else:
-            data = dict(params)               # shallow copy of user dict
-            
-        data["model"] = self._default_model   # hard-overwrite model
-        
-        # Cap num_predict if it exceeds max_num_predict
-        if "options" in data and "num_predict" in data["options"]:
-            data["options"]["num_predict"] = min(
-                data["options"]["num_predict"], 
-                self._max_num_predict
-            )
-        elif "num_predict" in data:
-            data["num_predict"] = min(data["num_predict"], self._max_num_predict)
-        else:
-            # Set default num_predict if not provided
-            if "options" not in data:
-                data["options"] = {}
-            data["options"]["num_predict"] = self._max_num_predict
-            
-        return data
+    def _extract_text(self, response) -> str:
+        """Extract plain text from a response object."""
+        if hasattr(response, 'response'):
+            return response.response
+        elif hasattr(response, 'message') and hasattr(response.message, 'content'):
+            return response.message.content
+        elif isinstance(response, dict):
+            if 'response' in response:
+                return response['response']
+            elif 'message' in response and isinstance(response['message'], dict):
+                return response['message'].get('content', '')
+        return str(response)
 
-    async def _make_request_async(self, endpoint: str, data: Dict[str, Any], *, timeout: Optional[float] = None) -> Dict[str, Any]:
-        """
-        Asynchronously make a request to the Ollama API.
-        
-        Args:
-            endpoint: API endpoint to call
-            data: Request data
-            timeout: Request timeout in seconds
-            
-        Returns:
-            Response dictionary
-        """
-        url = self._get_url(endpoint)
-        self.logger.debug(f"Making async request to {url}")
-        
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, json=data, timeout=timeout) as resp:
-                    if resp.status != 200:
-                        error_text = await resp.text()
-                        self.logger.error(f"Request failed with status {resp.status}: {error_text}")
-                        raise aiohttp.ClientResponseError(
-                            request_info=resp.request_info,
-                            history=resp.history,
-                            status=resp.status,
-                            message=error_text
-                        )
-                    
-                    response_text = await resp.text()
-                    if not response_text:
-                        self.logger.warning("Received empty response")
-                        return {"response": ""}
-                    
-                    try:
-                        return json.loads(response_text)
-                    except json.JSONDecodeError:
-                        self.logger.warning("Failed to parse JSON response, returning raw text")
-                        return {"response": response_text}
-            except asyncio.TimeoutError:
-                self.logger.error(f"Request timed out after {timeout}s")
-                raise
-            except Exception as e:
-                self.logger.error(f"Error during async request: {e}")
-                raise
+    def _get_tokens_generated(self, response) -> int:
+        """Extract the number of tokens generated from a response object."""
+        if hasattr(response, 'eval_count'):
+            return response.eval_count
+        elif isinstance(response, dict) and 'eval_count' in response:
+            return response['eval_count']
+        return 0
 
     # ---------- public API ----------
-    async def generate_async(self,
-                   params: Union[GenerationParameters, Dict[str, Any], List[Union[GenerationParameters, Dict[str, Any]]]],
-                   timeout: Optional[float] = None) -> List[Dict[str, Any]]:
+    def generate(self, 
+                prompts: Union[str, List[str]], 
+                params: Optional[Union[GenerationParameters, Dict[str, Any]]] = None) -> Union[str, List[str]]:
         """
-        Generate text asynchronously using the default model, handling batched prompts.
+        Generate text using the default model.
         
         Args:
-            params: Generation parameters or list of parameters (model will be overridden)
-            timeout: Request timeout in seconds
+            prompts: String prompt or list of string prompts
+            params: Optional generation parameters
             
         Returns:
-            List of response dictionaries containing generated text and metrics
+            Generated text as a string or list of strings
         """
-        # Convert single parameter to list for uniform processing
-        if not isinstance(params, list):
-            params_list = [params]
-        else:
-            params_list = params
-            
-        self.logger.info(f"Processing {len(params_list)} prompts with batch size {self._batch_size}")
+        # Convert params to options dict if provided
+        options = {}
+        if params:
+            if isinstance(params, GenerationParameters):
+                options = params.to_options_dict()
+            else:
+                options = dict(params)
         
-        # Process in batches
+        # Always set stream to False
+        options["stream"] = False
+        
+        # Ensure we have reasonable num_predict if not specified
+        if "num_predict" not in options:
+            options["num_predict"] = 32768
+        
+        # Convert single prompt to list for uniform processing
+        is_single = not isinstance(prompts, list)
+        prompts_list = [prompts] if is_single else prompts
+        
+        self.logger.info(f"Generating text for {len(prompts_list)} prompts with model {self._default_model}")
+        
         results = []
-        for i in range(0, len(params_list), self._batch_size):
-            batch = params_list[i:i + self._batch_size]
-            self.logger.info(f"Processing batch {i//self._batch_size + 1} with {len(batch)} prompts")
+        for idx, prompt in enumerate(prompts_list):
+            start_time = time.time()
+            prompt_preview = str(prompt)[:100] + ("..." if len(str(prompt)) > 100 else "")
+            self.logger.info(f"Generating completion for prompt {idx+1}/{len(prompts_list)}: {prompt_preview}")
             
-            # Prepare all requests in the batch
-            requests = []
-            for j, param in enumerate(batch):
-                data = self._enforce_defaults(param)
-                prompt_preview = data["prompt"][:100] + ("..." if len(data["prompt"]) > 100 else "")
-                self.logger.info(f"Batch {i//self._batch_size + 1}, Prompt {j+1}: {prompt_preview}")
+            try:
+                response = self._client.generate(
+                    model=self._default_model,
+                    prompt=prompt,
+                    options=options
+                )
                 
-                # Log generation parameters
-                gen_params = {k: v for k, v in data.items() if k != "prompt"}
-                gen_params["options"] = data.get("options", {})
-                self.logger.info(f"Generation parameters: {json.dumps(gen_params)}")
+                elapsed = time.time() - start_time
+                result_text = self._extract_text(response)
+                tokens_generated = self._get_tokens_generated(response)
                 
-                requests.append((data, time.time()))
+                tokens_per_sec = 0
+                if elapsed > 0 and tokens_generated > 0:
+                    tokens_per_sec = tokens_generated / elapsed
                 
-            # Process all requests in the batch concurrently
-            batch_results = await asyncio.gather(
-                *[self._make_request_async(self.GENERATE_ENDPOINT, data, timeout=timeout) 
-                  for data, _ in requests],
-                return_exceptions=True
-            )
-            
-            # Process results and add metrics
-            for j, ((data, start_time), result) in enumerate(zip(requests, batch_results)):
-                if isinstance(result, Exception):
-                    self.logger.error(f"Error in batch {i//self._batch_size + 1}, prompt {j+1}: {result}")
-                    results.append({
-                        "error": str(result),
-                        "metrics": {
-                            "inference_time": time.time() - start_time,
-                            "tokens_per_second": 0
-                        }
-                    })
-                else:
-                    elapsed = time.time() - start_time
-                    response_text = result.get("response", "")
-                    tokens = len(response_text.split())
-                    
-                    result["metrics"] = {
-                        "inference_time": elapsed,
-                        "tokens_per_second": tokens / elapsed if elapsed else 0,
-                        "total_tokens": tokens
-                    }
-                    
-                    # Log completed generation info
-                    self.logger.info(
-                        f"Batch {i//self._batch_size + 1}, Prompt {j+1} completed: "
-                        f"{len(response_text)} chars, {tokens} tokens, "
-                        f"{result['metrics']['tokens_per_second']:.2f} tokens/sec"
-                    )
-                    self.logger.info(
-                        f"Response preview: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
-                    )
-                    
-                    results.append(result)
-                    
-        return results
+                preview = result_text[:100] + ("..." if len(result_text) > 100 else "")
+                self.logger.info(
+                    f"Response {idx+1}/{len(prompts_list)} completed in {elapsed:.2f}s, "
+                    f"tokens: {tokens_generated}, tokens/sec: {tokens_per_sec:.2f}"
+                )
+                self.logger.info(f"Preview: {preview}")
+                
+                results.append(result_text)
+                
+            except Exception as e:
+                self.logger.error(f"Error processing prompt {idx+1}/{len(prompts_list)}: {e}")
+                raise
+        
+        # Return single result for single prompt
+        return results[0] if is_single else results
 
-    def generate(self,
-             params: Union[GenerationParameters, Dict[str, Any], List[Union[GenerationParameters, Dict[str, Any]]]],
-             timeout: Optional[float] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    def chat(self, 
+            messages: Union[Dict[str, str], List[Dict[str, str]], List[List[Dict[str, str]]]], 
+            params: Optional[Union[GenerationParameters, Dict[str, Any]]] = None) -> Union[str, List[str]]:
         """
-        Generate text using the default model, with support for batched prompts.
+        Generate chat completions.
         
         Args:
-            params: Generation parameters or list of parameters (model will be overridden)
-            timeout: Request timeout in seconds
+            messages: One of:
+                - Single message dict with 'role' and 'content'
+                - List of message dicts forming a conversation
+                - List of conversations (list of lists of message dicts)
+            params: Optional generation parameters
             
         Returns:
-            Single response dictionary or list of response dictionaries
+            Generated text as a string or list of strings
         """
-        # Determine if this is a single or batch request
-        is_single = not isinstance(params, list)
+        # Convert params to options dict if provided
+        options = {}
+        if params:
+            if isinstance(params, GenerationParameters):
+                options = params.to_options_dict()
+            else:
+                options = dict(params)
         
-        # Run the async method in a new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            results = loop.run_until_complete(self.generate_async(params, timeout))
-        finally:
-            loop.close()
+        # Always set stream to False
+        options["stream"] = False
+        
+        # Ensure we have reasonable num_predict if not specified
+        if "num_predict" not in options:
+            options["num_predict"] = 32768
+        
+        # Determine input format and normalize
+        if isinstance(messages, dict) and "role" in messages:
+            # Single message -> Single conversation
+            messages_list = [[messages]]
+            is_single_message = True
+        elif (isinstance(messages, list) and len(messages) > 0 and 
+              isinstance(messages[0], dict) and "role" in messages[0]):
+            # Single conversation
+            messages_list = [messages]
+            is_single_message = True
+        else:
+            # List of conversations
+            messages_list = messages
+            is_single_message = False
+        
+        self.logger.info(f"Generating chat completions for {len(messages_list)} conversations with model {self._default_model}")
+        
+        results = []
+        for idx, conversation in enumerate(messages_list):
+            start_time = time.time()
             
-        # Return single result or list based on input type
-        if is_single:
-            return results[0]
-        return results
+            # Log first message of conversation
+            content_preview = ""
+            if conversation and isinstance(conversation[0], dict) and "content" in conversation[0]:
+                content_preview = str(conversation[0].get("content", ""))[:100]
+                content_preview += "..." if len(str(conversation[0].get("content", ""))) > 100 else ""
+            
+            self.logger.info(f"Generating chat completion {idx+1}/{len(messages_list)} for conversation starting with: {content_preview}")
+            
+            try:
+                response = self._client.chat(
+                    model=self._default_model,
+                    messages=conversation,
+                    options=options
+                )
+                
+                elapsed = time.time() - start_time
+                result_text = self._extract_text(response)
+                tokens_generated = self._get_tokens_generated(response)
+                
+                tokens_per_sec = 0
+                if elapsed > 0 and tokens_generated > 0:
+                    tokens_per_sec = tokens_generated / elapsed
+                
+                preview = result_text[:100] + ("..." if len(result_text) > 100 else "")
+                self.logger.info(
+                    f"Response {idx+1}/{len(messages_list)} completed in {elapsed:.2f}s, "
+                    f"tokens: {tokens_generated}, tokens/sec: {tokens_per_sec:.2f}"
+                )
+                self.logger.info(f"Preview: {preview}")
+                
+                results.append(result_text)
+                
+            except Exception as e:
+                self.logger.error(f"Error processing conversation {idx+1}/{len(messages_list)}: {e}")
+                raise
+        
+        # Return single result for single message or conversation
+        return results[0] if is_single_message else results
 
-    def get_model_metrics(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def get_model_metrics(self) -> Dict[str, Any]:
         """
         Quick performance probe for the default model.
         
@@ -408,21 +385,29 @@ class OllamaClient:
             Dictionary with performance metrics
         """
         self.logger.info(f"Performing performance probe for model: {self._default_model}")
-        gen_params = GenerationParameters(
+        
+        t0 = time.time()
+        response = self._client.generate(
             model=self._default_model,
             prompt="Hello",
-            num_predict=1,
-            temperature=0
+            options={"num_predict": 1, "temperature": 0, "stream": False}
         )
-        t0 = time.time()
-        resp = self.generate(gen_params, timeout=timeout)
         elapsed = time.time() - t0
+        
+        tokens_per_second = 0
+        if hasattr(response, 'eval_count') and hasattr(response, 'eval_duration'):
+            # Convert nanoseconds to seconds if necessary
+            eval_duration_sec = response.eval_duration / 1_000_000_000 if response.eval_duration > 1000 else response.eval_duration
+            if eval_duration_sec > 0:
+                tokens_per_second = response.eval_count / eval_duration_sec
+        
         metrics = {
             "model": self._default_model,
             "startup_time": elapsed,
             "first_token_time": elapsed,
-            "tokens_per_second": resp["metrics"]["tokens_per_second"],
-            "memory_usage": resp.get("memory_used", 0)
+            "tokens_per_second": tokens_per_second,
+            "memory_used": getattr(response, 'prompt_eval_count', 0)
         }
+        
         self.logger.info(f"Model metrics: {metrics}")
         return metrics

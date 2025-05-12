@@ -61,6 +61,7 @@ multiprocess==0.70.16
 mypy_extensions==1.1.0
 networkx==3.4.2
 numpy==2.2.5
+ollama==0.4.8
 omegaconf==2.3.0
 openai==1.76.2
 orjson==3.10.18
