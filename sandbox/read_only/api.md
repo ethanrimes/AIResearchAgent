@@ -16,6 +16,7 @@ Both `OllamaClient` and `rStarDataLoader` are designed to be **configuration-dri
 To import these modules from the `/read_only` directory in your experiment code:
 
 ```python
+import sys; sys.path.append('/read_only')  # Force path in the module itself
 # Now you can import the modules directly
 from dataloader.rstar_data_loader import rStarDataLoader
 from models.ollama_client import OllamaClient, GenerationParameters
@@ -89,6 +90,7 @@ Constructor behavior:
 
 ##### Example: Single Text Generation
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient, GenerationParameters
 
 client = OllamaClient()              # Uses model from internal configuration
@@ -105,6 +107,7 @@ print(response)                      # The generated text as a string
 
 ##### Example: Multiple Text Generation
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient, GenerationParameters
 
 client = OllamaClient()              # Uses model from internal configuration
@@ -133,6 +136,7 @@ for i, response in enumerate(responses):
 
 ##### Example: Single Chat Completion
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient, GenerationParameters
 
 client = OllamaClient()              # Uses model from internal configuration
@@ -155,6 +159,7 @@ print(response)                      # The generated chat response as a string
 
 ##### Example: Multiple Chat Completions
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient, GenerationParameters
 
 client = OllamaClient()              # Uses model from internal configuration
@@ -182,6 +187,7 @@ for i, response in enumerate(responses):
 
 ##### Example: Chat with Multi-turn Conversation
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient, GenerationParameters
 
 client = OllamaClient()              # Uses model from internal configuration
@@ -205,6 +211,7 @@ print(response)                      # The generated chat response as a string
 
 ##### Example: Model Performance Metrics
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient
 
 client = OllamaClient()              # Uses model from internal configuration
@@ -252,6 +259,7 @@ problems: list[dict] = loader.load()
 
 ##### Example
 ```python
+import sys; sys.path.append('/read_only')
 from dataloader.rstar_data_loader import rStarDataLoader
 
 # Configuration should be set up before creating the loader
@@ -303,6 +311,7 @@ These utilities are all private (`_`-prefixed) but can be reused if desired.
 
 ##### Quick Demo
 ```python
+import sys; sys.path.append('/read_only')
 from evaluator.answer_evaluation import AnswerEvaluator
 
 gen  = "We get \\boxed{\\frac{1}{2}} as the probability."
@@ -321,6 +330,7 @@ print(ok)           # -> True
 ### Example: Processing a Dataset with Generate
 
 ```python
+import sys; sys.path.append('/read_only')
 from models.ollama_client import OllamaClient, GenerationParameters
 from dataloader.rstar_data_loader import rStarDataLoader
 from evaluator.answer_evaluation import AnswerEvaluator

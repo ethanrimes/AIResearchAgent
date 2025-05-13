@@ -4,8 +4,8 @@ reasoner_model: qwen3:0.6b    # Model used for solving math problems
 directives_path: core/directives/test_time_compute_directives    # Path to agent directives
 
 ## Dataset Configuration
-dataset_path: data/rstar/aime2024_test.json    # Path to the dataset file
-max_questions: -1    # Maximum number of questions to load (-1 for all questions)
+dataset_path: data/rstar/amc23_test.json    # Path to the dataset file
+max_questions: 5    # Maximum number of questions to load (-1 for all questions)
 
 ## Runtime Constraints
 memory_window_size: 0    # Size of memory window for context (0 for unlimited)
@@ -15,4 +15,4 @@ bash_timeout: 6000    # Timeout for bash commands in seconds
 
 ## Ollama Generation Configuration
 batch_size: 4    # Number of prompts to process concurrently in each batch
-max_num_predict: 2048    # Maximum number of tokens to generate per request
+max_num_predict: 32768    # Maximum number of tokens to generate per request
