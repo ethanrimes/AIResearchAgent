@@ -63,7 +63,7 @@ class AgentConfig:
             cls._max_num_predict = config.get("max_num_predict", 2048)  # Default to 2048 if not specified
             
             # Write config to a file that can be accessed by subprocesses
-            cls._write_config_to_file()
+            # cls._write_config_to_file()
             
             cls._initialized = True
             logger.info(f"Loaded configuration with dataset_path={cls._dataset_path}, "
@@ -76,28 +76,28 @@ class AgentConfig:
             logger.error(f"Error loading configuration: {e}")
             raise
     
-    @classmethod
-    def _write_config_to_file(cls) -> None:
-        """Write the configuration to a JSON file for subprocess access."""
-        try:
-            config_dir = Path("/experiment")
-            config_dir.mkdir(exist_ok=True)
-            config_path = config_dir / "agent_config.json"
+    # @classmethod
+    # def _write_config_to_file(cls) -> None:
+    #     """Write the configuration to a JSON file for subprocess access."""
+    #     try:
+    #         config_dir = Path("/experiment")
+    #         config_dir.mkdir(exist_ok=True)
+    #         config_path = config_dir / "agent_config.json"
             
-            config_data = {
-                "dataset_path": cls._dataset_path,
-                "reasoner_model": cls._reasoner_model,
-                "batch_size": cls._batch_size,
-                "max_num_predict": cls._max_num_predict,
-                "full_config": cls._full_config
-            }
+    #         config_data = {
+    #             "dataset_path": cls._dataset_path,
+    #             "reasoner_model": cls._reasoner_model,
+    #             "batch_size": cls._batch_size,
+    #             "max_num_predict": cls._max_num_predict,
+    #             "full_config": cls._full_config
+    #         }
             
-            with open(config_path, 'w') as f:
-                json.dump(config_data, f, indent=2)
+    #         with open(config_path, 'w') as f:
+    #             json.dump(config_data, f, indent=2)
                 
-            logger.info(f"Configuration written to {config_path}")
-        except Exception as e:
-            logger.error(f"Error writing configuration file: {e}")
+    #         logger.info(f"Configuration written to {config_path}")
+    #     except Exception as e:
+    #         logger.error(f"Error writing configuration file: {e}")
     
     @classmethod
     def _load_from_file(cls) -> bool:
@@ -138,8 +138,8 @@ class AgentConfig:
         """
         if not cls._initialized:
             # Try to load from file first
-            if cls._load_from_file():
-                return
+            # if cls._load_from_file():
+            #     return
                 
             # Look for environment variables as fallback
             env_model = os.environ.get("REASONER_MODEL")

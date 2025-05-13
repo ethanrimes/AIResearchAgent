@@ -55,12 +55,13 @@ class CritiqueChain:
         prompt = PromptTemplate.from_template(
             template=(
                 f"{self.directive}\n\n"
-                "# Code to Review\n"
+                "# 1. Code to Review\n"
                 "{experiment_code}\n\n"
-                "# Experiment Plan\n"
+                "# 2. Experiment Plan\n"
                 "{experiment_plan}\n\n"
-                "# Generated Hypotheses\n"
+                "# 3. Generated Hypotheses\n"
                 "{hypotheses_content}\n\n"
+                "# 4. Review Instructions\n"
                 "{input}\n\n"
             )
         )

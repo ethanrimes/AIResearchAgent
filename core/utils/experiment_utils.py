@@ -152,7 +152,7 @@ def get_current_experiment_code(experiment_dir: Path) -> str:
         experiment_dir: Path to the experiment directory.
         
     Returns:
-        str: A formatted string containing all code files with annotations
+        str: A formatted string containing directory structure and all code files with annotations
     """
     logger = logging.getLogger("ai_research_agent.experiment_utils")
     
@@ -160,21 +160,48 @@ def get_current_experiment_code(experiment_dir: Path) -> str:
         logger.warning(f"Experiment directory does not exist: {experiment_dir}")
         return "No experiment code found."
     
-    code_files = list(experiment_dir.glob("**/*.py"))
-    if not code_files:
-        logger.info("No files found in experiment directory.")
-        return "No files found in experiment directory."
+    # Generate directory tree
+    tree_output = ["# Experiment Directory Structure", "```"]
     
-    result = []
+    def build_tree(directory, prefix=""):
+        files = sorted(directory.glob("*"))
+        items = list(files)
+        for i, path in enumerate(items):
+            is_last = i == len(items) - 1
+            connector = "└── " if is_last else "├── "
+            tree_output.append(f"{prefix}{connector}{path.name}")
+            if path.is_dir():
+                next_prefix = prefix + ("    " if is_last else "│   ")
+                build_tree(path, next_prefix)
+    
+    build_tree(experiment_dir)
+    tree_output.append("```\n")
+    
+    # Get all code files of specified types
+    code_extensions = [".py", ".sh", ".txt", ".json", ".yaml", ".yml"]
+    code_files = []
+    for ext in code_extensions:
+        code_files.extend(list(experiment_dir.glob(f"**/*{ext}")))
+    
+    if not code_files:
+        logger.info("No matching files found in experiment directory.")
+        return "\n".join(tree_output) + "\nNo matching code files found in experiment directory."
+    
+    # Sort files by name for consistent output
+    code_files.sort()
+    
+    result = tree_output.copy()
     for file_path in code_files:
         if file_path.is_file():
             try:
                 file_content = file_path.read_text()
+                # Get the relative path from the experiment directory
+                relative_path = file_path.relative_to(experiment_dir)
                 file_extension = file_path.suffix[1:] if file_path.suffix else "txt"
-                result.append(f"## File: {file_path.name}\n```{file_extension}\n{file_content}\n```\n")
+                result.append(f"## File: {relative_path}\n```{file_extension}\n{file_content}\n```\n")
             except Exception as e:
                 logger.error(f"Error reading file {file_path}: {str(e)}")
-                result.append(f"## File: {file_path.name}\nError reading file: {str(e)}\n")
+                result.append(f"## File: {file_path.relative_to(experiment_dir)}\nError reading file: {str(e)}\n")
     
     return "\n".join(result)
 
@@ -446,24 +473,30 @@ def format_experiment_prompt(
     
     # Create the shared base prompt (for all iterations)
     prompt_parts = [
-        f"# Directive\n{directive}\n\n",
-        f"# Iteration\n{iteration}\n\n"
+        f"1. # Directive\n{directive}\n\n",
+        f"2. # Iteration\n{iteration}\n\n"
     ]
+    
+    section_count = 2
     
     # Add experiment plan if available
     if plan_data:
         experiment_plan = plan_data.get("experiment_plan", {})
         implementation_plan = plan_data.get("implementation_plan", {})
         
-        prompt_parts.append(f"# Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n")
-        prompt_parts.append(f"# Implementation Plan\n```json\n{json.dumps(implementation_plan, indent=2)}\n```\n\n")
+        section_count += 1
+        prompt_parts.append(f"{section_count}. # Experiment Plan\n```json\n{json.dumps(experiment_plan, indent=2)}\n```\n\n")
+        
+        section_count += 1
+        prompt_parts.append(f"{section_count}. # Implementation Plan\n```json\n{json.dumps(implementation_plan, indent=2)}\n```\n\n")
     
     # Add hypotheses if available
     hypotheses_file = Path("/hypothesis/hypotheses.json")
     if hypotheses_file.exists():
         try:
             hypotheses_content = json.loads(hypotheses_file.read_text())
-            prompt_parts.append(f"# Hypotheses\n```json\n{json.dumps(hypotheses_content, indent=2)}\n```\n\n")
+            section_count += 1
+            prompt_parts.append(f"{section_count}. # Hypotheses\n```json\n{json.dumps(hypotheses_content, indent=2)}\n```\n\n")
         except Exception as e:
             logger.error(f"Error reading hypotheses file: {e}")
     
@@ -472,23 +505,28 @@ def format_experiment_prompt(
     if api_doc_file.exists():
         try:
             api_docs = api_doc_file.read_text()
-            prompt_parts.append(f"# API Documentation\n# These are the APIs which must be used for data loader, model client, answer extraction and evaluation\n{api_docs}\n\n")
+            section_count += 1
+            prompt_parts.append(f"{section_count}. # API Documentation\n# These are the APIs which must be used for data loader, model client, answer extraction and evaluation\n{api_docs}\n\n")
         except Exception as e:
             logger.error(f"Error reading API documentation: {e}")
     
     # Add experiment directory information
-    prompt_parts.append(f"# Experiment Code Directory\n{experiment_dir}\n\n")
+    section_count += 1
+    prompt_parts.append(f"{section_count}. # Experiment Code Directory\n{experiment_dir}\n\n")
     
     # Add entry point information
-    prompt_parts.append(f"# Entry Point\n{entry_script}\n\n")
+    section_count += 1
+    prompt_parts.append(f"{section_count}. # Entry Point\n{entry_script}\n\n")
     
     # Add current code (for all iterations - may be empty for iteration 0)
+    section_count += 1
     current_code = get_current_experiment_code(experiment_dir)
-    prompt_parts.append(f"# Current Experiment Code\n{current_code}\n\n")
+    prompt_parts.append(f"{section_count}. # Current Experiment Code\n{current_code}\n\n")
     
     # Add task details
+    section_count += 1
     prompt_parts.append(
-        "# Task\n"
+        f"{section_count}. # Task\n"
         "Implement the experiment according to the plan. Create all required files in the experiment directory.\n"
         f"- Create a bash script at '/experiment/{entry_script}' (absolute path) that will run the experiment.\n"
         "- The experiment must output results to '/results/results_summary.json' (absolute path).\n"
@@ -496,8 +534,9 @@ def format_experiment_prompt(
     )
     
     # Add environment constraints
+    section_count += 1
     prompt_parts.append(
-        "# Environment Constraints\n"
+        f"{section_count}. # Environment Constraints\n"
         "- The LLM used in this experiment has a context window of 32768 tokens\n"
         "- The LLM will think for an extended period surrounding thinking in <think></think> tokens\n"
         "- Given the extended thinking time of this model, ensure that the model has sufficient tokens to arrive at answer\n"
@@ -510,35 +549,40 @@ def format_experiment_prompt(
     if iteration > 0:
         # Add previous output if available
         if previous_output:
-            prompt_parts.append(f"# Previous Output\n{previous_output}\n\n")
+            section_count += 1
+            prompt_parts.append(f"{section_count}. # Previous Output\n{previous_output}\n\n")
         
         # Add error information if available
         if error_information:
-            prompt_parts.append(f"# Error Information\n{error_information}\n\n")
+            section_count += 1
+            prompt_parts.append(f"{section_count}. # Error Information\n{error_information}\n\n")
         
         # Add type check results if available
         if type_check_results:
+            section_count += 1
             type_check_section = ""
             if type_check_results.get("has_errors", False):
-                type_check_section = f"# Type Check Results\nFound {type_check_results.get('error_count', 0)} type errors:\n- " + "\n- ".join(type_check_results.get('errors', [])) + "\n\n"
+                type_check_section = f"{section_count}. # Type Check Results\nFound {type_check_results.get('error_count', 0)} type errors:\n- " + "\n- ".join(type_check_results.get('errors', [])) + "\n\n"
             else:
-                type_check_section = "# Type Check Results\nNo type errors found.\n\n"
+                type_check_section = f"{section_count}. # Type Check Results\nNo type errors found.\n\n"
             prompt_parts.append(type_check_section)
         
         # Process validation results
         if critique_results and validation_results:
+            section_count += 1
             # Get enriched checklist and flattened validation
             enriched_checklist, flattened_validation = process_validation_checklist(
                 critique_results, validation_results
             )
             
             # Add the enriched checklist to the prompt
-            prompt_parts.append(f"# Validation Checklist\n```json\n{json.dumps(enriched_checklist, indent=2)}\n```\n\n")
+            prompt_parts.append(f"{section_count}. # Validation Checklist\n```json\n{json.dumps(enriched_checklist, indent=2)}\n```\n\n")
             
             # Log the validation results
             log_validation_results(validation_results, enriched_checklist, iteration-1)
             
         elif validation_results:
+            section_count += 1
             # Create minimal enriched checklist for basic validation
             basic_enriched = {}
             for key in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
@@ -556,18 +600,20 @@ def format_experiment_prompt(
                     flattened_validation[key] = is_met
             
             # Add to prompt
-            prompt_parts.append(f"# Basic Validation Checks\n```json\n{json.dumps(basic_enriched, indent=2)}\n```\n\n")
+            prompt_parts.append(f"{section_count}. # Basic Validation Checks\n```json\n{json.dumps(basic_enriched, indent=2)}\n```\n\n")
             
             # Log validation results
             log_validation_results(validation_results, None, iteration-1)
         
         # Add bash output if available
         if validation_results and validation_results.get("bash_output"):
-            prompt_parts.append(f"# Bash Output\n```\n{validation_results.get('bash_output')}\n```\n\n")
+            section_count += 1
+            prompt_parts.append(f"{section_count}. # Bash Output\n```\n{validation_results.get('bash_output')}\n```\n\n")
         
         # Add updated task instructions for this iteration
+        section_count += 1
         prompt_parts.append(
-            "# Iteration Task\n"
+            f"{section_count}. # Iteration Task\n"
             "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
             f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
         )
