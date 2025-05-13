@@ -48,69 +48,99 @@ class RunBashTool(BaseTool):
         self.logger.info(f"Initialized run_bash tool with timeout: {timeout} seconds")
 
 
-    def clear_results_directory(self, timestamp=None):
+    def check_experiment_run_command(self, command: str) -> Tuple[bool, Optional[str]]:
         """
-        Clear the results directory by moving files to a timestamped folder in the scratchpad directory.
+        Check if the command is trying to run the experiment entrypoint script.
         
         Args:
-            timestamp (str, optional): Timestamp to use for the folder name. If None, current time is used.
-        
+            command (str): The bash command to execute
+            
         Returns:
-            str: Message indicating success or failure
+            Tuple[bool, Optional[str]]: (is_blocked, error_message)
+                                        where is_blocked is True if the command should be blocked
         """
-        import time
-        import shutil
-        from glob import glob
+        # Look for both direct calls and calls with parameters
+        if "/experiment/run_experiment.sh" in command:
+            error_msg = (
+                "ERROR: You cannot directly call the experiment entrypoint script. "
+                "At the end of this iteration, the experiment will be automatically run, "
+                "results collected, and passed back to you for the next iteration."
+            )
+            self.logger.warning(f"Blocked attempt to run experiment entrypoint: {command}")
+            return True, error_msg
+        return False, None
+
+    def handle_shell_script(self, command: str) -> Tuple[str, Optional[str]]:
+        """
+        Handle shell script permissions and shebangs for .sh files.
         
-        # Generate timestamp if not provided
-        if timestamp is None:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
+        Args:
+            command (str): The bash command to execute
+            
+        Returns:
+            Tuple[str, Optional[str]]: (possibly_modified_command, message)
+                                    where message is None if no modifications were needed
+        """
+        import re
+        import os
+        from pathlib import Path
         
-        try:
-            # Define paths
-            results_dir = self.working_dir / "results"
-            scratchpad_dir = self.working_dir / "scratchpad"
-            target_dir = scratchpad_dir / f"{timestamp}_results"
-            
-            # Check if results directory exists
-            if not results_dir.exists():
-                self.logger.info(f"Results directory does not exist at {results_dir}")
-                return f"No results directory found at {results_dir}"
-            
-            # Ensure scratchpad directory exists
-            scratchpad_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Create target directory
-            target_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Find all files in results directory
-            result_files = list(results_dir.glob("**/*"))
-            files_to_move = [f for f in result_files if f.is_file()]
-            
-            if not files_to_move:
-                self.logger.info(f"No files found in results directory {results_dir}")
-                return f"No files found in results directory {results_dir}"
-            
-            # Move each file preserving directory structure
-            for file_path in files_to_move:
-                # Get relative path from results directory
-                rel_path = file_path.relative_to(results_dir)
-                # Create destination path with same structure
-                dest_path = target_dir / rel_path
-                # Ensure parent directory exists
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                # Move the file
-                shutil.move(str(file_path), str(dest_path))
-                self.logger.info(f"Moved {file_path} to {dest_path}")
-            
-            self.logger.info(f"Successfully moved {len(files_to_move)} files to {target_dir}")
-            return f"Successfully moved {len(files_to_move)} files from results to {target_dir}"
+        # Use regex to find .sh file paths in the command
+        # This pattern looks for .sh files that are being executed
+        sh_file_pattern = r'(?:^|\s+)(?:bash\s+|sh\s+|\.\/)?([^\s;|&<>]+\.sh)'
+        matches = re.findall(sh_file_pattern, command)
         
-        except Exception as e:
-            error_msg = f"Failed to clear results directory: {str(e)}"
-            self.logger.error(error_msg, exc_info=True)
-            return error_msg
+        if not matches:
+            return command, None
         
+        modifications_made = []
+        
+        for sh_file in matches:
+            # Resolve the path relative to working directory
+            if sh_file.startswith('/'):
+                # Absolute path
+                sh_path = Path(sh_file)
+            else:
+                # Relative path
+                sh_path = (self.working_dir / sh_file).resolve()
+            
+            # Check if the file exists
+            if not sh_path.exists():
+                self.logger.warning(f"Shell script not found: {sh_path}")
+                continue
+                
+            try:
+                # Check if file is executable
+                if not os.access(sh_path, os.X_OK):
+                    os.chmod(sh_path, 0o755)  # Add executable permission
+                    self.logger.info(f"Added executable permissions to {sh_path}")
+                    modifications_made.append(f"Added executable permissions to {sh_file}")
+                
+                # Check if file has a shebang
+                with open(sh_path, 'r') as f:
+                    first_line = f.readline().strip()
+                    
+                if not first_line.startswith('#!'):
+                    # Add shebang line without overwriting content
+                    with open(sh_path, 'r') as f:
+                        content = f.read()
+                    
+                    with open(sh_path, 'w') as f:
+                        f.write('#!/bin/bash\n' + content)
+                    
+                    self.logger.info(f"Added shebang to {sh_path}")
+                    modifications_made.append(f"Added shebang line to {sh_file}")
+            
+            except Exception as e:
+                self.logger.error(f"Error handling shell script {sh_path}: {str(e)}")
+                modifications_made.append(f"Failed to modify {sh_file}: {str(e)}")
+        
+        message = None
+        if modifications_made:
+            message = "Script modifications: " + "; ".join(modifications_made)
+            
+        return command, message
+
     # --------------------------------------------------
     def _run(self, command: str = None, timeout: Optional[int] = None) -> Tuple[str, int]:
         """
@@ -122,23 +152,25 @@ class RunBashTool(BaseTool):
             
         Returns:
             Tuple[str, int]: A tuple containing (output_string, return_code)
-                             where return_code is 0 for success, non-zero for failure
+                            where return_code is 0 for success, non-zero for failure
         """
         # Log all parameters when tool is called
         params_str = ', '.join([f'{k}={v}' for k, v in locals().items() if k != 'self'])
         self.logger.info(f"Tool {self.name} called with parameters: {params_str}")
         
-        # Clear results directory
-        import time
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        clear_result = self.clear_results_directory(timestamp)
-        self.logger.info(clear_result)
-        
         # Validate parameters
         if command is None:
             self.logger.error("Required parameter 'command' is missing")
             return "ERROR: Required parameter 'command' is missing", 1
-            
+        
+        # Check if command is trying to run the experiment script
+        is_blocked, block_message = self.check_experiment_run_command(command)
+        if is_blocked:
+            return block_message, 1
+        
+        # Handle shell script permissions and shebangs
+        command, shell_modifications = self.handle_shell_script(command)
+        
         # Use the provided timeout if specified, otherwise use the instance timeout
         effective_timeout = timeout if timeout is not None else self.timeout
         self.logger.info(f"Using timeout of {effective_timeout} seconds for command execution")
@@ -231,9 +263,14 @@ class RunBashTool(BaseTool):
             # Format and return the command result with return code
             if rc == 0:
                 if not stdout and not stderr:
-                    self.logger.info("Command executed successfully with no output")
-                    return "Command executed successfully with no output.", rc
+                    result = "Command executed successfully with no output."
+                    if shell_modifications:
+                        result = f"{shell_modifications}\n{result}"
+                    self.logger.info(result)
+                    return result, rc
                 result = ""
+                if shell_modifications:
+                    result += f"{shell_modifications}\n"
                 if stdout:
                     result += f"STDOUT:\n{stdout}\n"
                 if stderr:
@@ -242,6 +279,8 @@ class RunBashTool(BaseTool):
             else:
                 self.logger.error(f"Command failed with return code {rc}")
                 result = f"Command failed with return code {rc}\n"
+                if shell_modifications:
+                    result += f"{shell_modifications}\n"
                 if stdout:
                     result += f"STDOUT:\n{stdout}\n"
                 if stderr:

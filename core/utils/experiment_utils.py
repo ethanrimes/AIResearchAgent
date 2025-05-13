@@ -188,7 +188,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         experiment_dir: Path to the experiment directory.
         results_dir: Path to the results directory.
         entry_script_name: Name of the entry script file.
-        run_bash_tool: Optional RunBashTool to execute the entry script.
+        run_bash_tool: Optional RunBashTool or RunExperimentTool to execute the entry script.
         
     Returns:
         Dict containing validation results and errors if any.
@@ -232,7 +232,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         validation_results["python_files_exist"] = True
     
     # STEP 3: If we have both entry script and Python files, and run_bash_tool is provided, execute the script
-    # Use the timeout value from the RunBashTool instance if available
+    # First check if it's a RunExperimentTool or RunBashTool
     if run_bash_tool and validation_results["entry_script_exists"] and validation_results["python_files_exist"]:
         try:
             # Add a wide log statement spanning the width before running the bash tool
@@ -240,8 +240,13 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
             logger.info(f"EXECUTING EXPERIMENT SCRIPT: {entry_script_path}")
             logger.info("=" * 100)
             
-            # The RunBashTool._run method now returns a tuple (output, return_code)
-            result_tuple = run_bash_tool._run(command=f"bash {entry_script_path}")
+            # Check if it's the RunExperimentTool (by checking for the name attribute or method signature)
+            if hasattr(run_bash_tool, 'name') and run_bash_tool.name == "run_experiment":
+                # Use the RunExperimentTool to execute the script
+                result_tuple = run_bash_tool._run(script_path=entry_script_name)
+            else:
+                # Fall back to using RunBashTool with the full bash command
+                result_tuple = run_bash_tool._run(command=f"bash {entry_script_path}")
             
             # Check if result is a tuple (output, return_code)
             if isinstance(result_tuple, tuple) and len(result_tuple) == 2:
@@ -254,7 +259,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
             else:
                 # Handle backward compatibility if _run doesn't return a tuple
                 validation_results["bash_output"] = result_tuple
-                logger.warning("RunBashTool._run did not return a return code. Cannot verify execution success.")
+                logger.warning("Tool._run did not return a return code. Cannot verify execution success.")
             
             # Add another wide log statement after execution
             logger.info("=" * 100)
@@ -432,7 +437,6 @@ def format_experiment_prompt(
         - A dictionary with flattened validation results (requirement -> bool)
     """
     from typing import Tuple
-    from core.utils.logging_utils import log_validation_results
     
     logger = logging.getLogger("ai_research_agent.experiment_utils")
     

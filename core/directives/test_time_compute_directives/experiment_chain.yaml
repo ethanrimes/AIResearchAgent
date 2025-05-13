@@ -47,7 +47,7 @@ instructions: |
   - Run the full experiment and write the results (including correctness, reasoning trace, and timing) to a JSON file in /results.
   - You may consult example code at /read_only/example for structure or inspiration, but do not copy code directly.
   
-  - The final statistics your code generates should output to /results/result_summary.json the following schema:
+  - The final statistics your code generates should output to /results/results_summary.json the following schema:
   ```json
   {{
     "experiment_results": {{

@@ -139,13 +139,13 @@ class EvaluatorOutput(BaseModel):
 
 class RequirementDetail(BaseModel):
     is_met: bool = Field(..., description="Whether the requirement is met")
-    comment: str = Field("", description="Explanation why the requirement is not met, if applicable")
+    comment: Optional[str] = Field(None, description="Explanation why the requirement is not met, if applicable")
 
 
 class HypothesisImplementationDetail(BaseModel):
     hypothesis_id: str = Field(..., description="The ID of the hypothesis (e.g., H1)")
     is_implemented: bool = Field(..., description="Whether this hypothesis is fully implemented")
-    comment: str = Field("", description="Explanation why the hypothesis is not fully implemented, if applicable")
+    comment: Optional[str] = Field(None, description="Explanation why the hypothesis is not fully implemented, if applicable")
 
 
 class HypothesesImplementation(BaseModel):
@@ -154,21 +154,6 @@ class HypothesesImplementation(BaseModel):
         default_factory=list, description="Details for each hypothesis implementation"
     )
 
-
-class RequirementDetail(BaseModel):
-    is_met: bool = Field(..., description="Whether the requirement is met")
-    comment: str = Field("", description="Explanation why the requirement is not met, if applicable")
-
-class HypothesisImplementationDetail(BaseModel):
-    hypothesis_id: str = Field(..., description="The ID of the hypothesis (e.g., H1)")
-    is_implemented: bool = Field(..., description="Whether this hypothesis is fully implemented")
-    comment: str = Field("", description="Explanation why the hypothesis is not fully implemented, if applicable")
-
-class HypothesesImplementation(BaseModel):
-    all_implemented: bool = Field(..., description="Whether all hypotheses are fully implemented")
-    implementation_details: List[HypothesisImplementationDetail] = Field(
-        default_factory=list, description="Details for each hypothesis implementation"
-    )
 
 class RequirementsMet(BaseModel):
     hypotheses_implementation: HypothesesImplementation = Field(

@@ -15,14 +15,26 @@ class rStarDataLoader:
         """
         Initialize the data loader.
         """
-        # Get configuration from the registry using class method
-        # This properly uses the AgentConfig as a singleton with class methods
-        self._dataset_path = AgentConfig.dataset_path()
-        self._max_questions = AgentConfig.config().get("max_questions", -1)
-        
         # Set up module-specific logger
         self.logger = logging.getLogger("ai_research_agent.rstar_data_loader")
         self._setup_logger()
+        # Get configuration from the registry using class method
+        # This properly uses the AgentConfig as a singleton with class methods
+        default_config_path = "/app/core/config/default_config.yaml"
+        if os.path.exists(default_config_path):
+            self.logger.info(f"Loading configuration from default path: {default_config_path}")
+            try:
+                AgentConfig.load_config(default_config_path)
+            except Exception as e:
+                self.logger.warning(f"Failed to load config from default path: {e}")
+        
+        # Ensure configuration is initialized one way or another
+        AgentConfig.ensure_initialized()
+        
+        
+        self._dataset_path = AgentConfig.dataset_path()
+        self._max_questions = AgentConfig.config().get("max_questions", -1)
+        
         
         if not self._dataset_path:
             self.logger.warning("Dataset path is not set in the configuration")

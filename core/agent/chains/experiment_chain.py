@@ -37,6 +37,7 @@ from core.agent.tools.update_file import UpdateFileTool
 from core.agent.tools.delete_file import DeleteFileTool
 from core.agent.tools.list_files import ListFilesTool
 from core.agent.tools.run_bash import RunBashTool
+from core.agent.tools.run_experiment import RunExperimentTool  # Add this import
 from core.agent.tools.run_code import RunCodeTool
 from core.utils.path_utils import get_active_run_path
 from core.utils.experiment_utils import get_current_experiment_code, validate_experiment_output
@@ -139,14 +140,25 @@ class ExperimentChain:
             ]
         )
 
+        # Initialize RunBashTool as before (for general bash commands)
         self.run_bash_tool = RunBashTool(
             working_dir="/experiment", 
             output_dir="/scratchpad",
             timeout=self.bash_timeout
         )
 
+        # Initialize the new RunExperimentTool for experiment script execution
+        # This tool is NOT added to the agent's toolset - it's only used internally
+        # by the ExperimentChain class for validation
+        self.run_experiment_tool = RunExperimentTool(
+            working_dir="/experiment",
+            output_dir="/scratchpad",
+            timeout=self.bash_timeout
+        )
+
         run_code_tool = RunCodeTool()
 
+        # Note that run_experiment_tool is NOT included in the returned list of tools
         return [
             read_tool,
             write_tool,
@@ -256,8 +268,9 @@ class ExperimentChain:
                     self.exp_dir, 
                     self.results_dir, 
                     self.ENTRY_SCRIPT,
-                    run_bash_tool=self.run_bash_tool
+                    run_bash_tool=self.run_experiment_tool  # Use run_experiment_tool instead of run_bash_tool
                 )
+
                 
                 # Store bash output for reporting (only the output portion from the tuple)
                 if isinstance(validation_results.get("bash_output"), tuple) and len(validation_results.get("bash_output")) >= 1:

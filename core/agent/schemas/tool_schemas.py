@@ -71,6 +71,19 @@ class RunBashOutput(BaseModel):
 
 
 # ──────────────────────────
+# Run Experiment tool
+# ──────────────────────────
+class RunExperimentInput(BaseModel):
+    script_path: Optional[str] = Field(None, description="Path to the experiment script to execute (defaults to run_experiment.sh)")
+    timeout: Optional[int] = Field(600, description="Timeout for the script execution in seconds")
+
+
+class RunExperimentOutput(BaseModel):
+    output: str
+    return_code: int = Field(0, description="Return code of the script (0 for success, non-zero for error)")
+
+
+# ──────────────────────────
 # Python-code tool
 # ──────────────────────────
 class RunCodeInput(BaseModel):

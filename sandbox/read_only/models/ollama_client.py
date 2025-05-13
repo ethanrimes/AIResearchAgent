@@ -144,9 +144,25 @@ class OllamaClient:
 
     # ---------- construction & immutability helpers ----------
     def __init__(self) -> None:
+        
+        # Configure module-specific logger
+        logger_name = "ai_research_agent.ollama_client"
+        object.__setattr__(self, "logger", setup_module_logger(logger_name))
+        
+        default_config_path = "/app/core/config/default_config.yaml"
+        if os.path.exists(default_config_path):
+            self.logger.info(f"Loading configuration from default path: {default_config_path}")
+            try:
+                AgentConfig.load_config(default_config_path)
+            except Exception as e:
+                self.logger.warning(f"Failed to load config from default path: {e}")
+        
+        # Ensure configuration is initialized one way or another
+        AgentConfig.ensure_initialized()
+        
+
         # Set base URL from environment with fallback to default
         base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-        
         # Set immutable attributes using object.__setattr__
         object.__setattr__(self, "_base_url", base_url)
         object.__setattr__(self, "_default_model", AgentConfig.reasoner_model())
@@ -157,9 +173,7 @@ class OllamaClient:
         # Configure the Ollama client
         object.__setattr__(self, "_client", Client(host=base_url))
         
-        # Configure module-specific logger
-        logger_name = "ai_research_agent.ollama_client"
-        object.__setattr__(self, "logger", setup_module_logger(logger_name))
+        
         self.logger.info(f"Initializing OllamaClient with base URL: {self._base_url}")
         self.logger.info(f"Using model from configuration: {self._default_model}")
 

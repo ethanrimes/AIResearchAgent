@@ -61,7 +61,7 @@ client = OllamaClient()
 ```
 
 Constructor behavior:
-* Gets the model name from internal configuration via `AgentConfig.reasoner_model()`
+* Gets the model name from internal configuration via internal absolute paths
 * Uses `OLLAMA_BASE_URL` environment variable (default: `"http://host.docker.internal:11434"`) for the base URL
 * Immediately performs a connectivity check to ensure the server is alive
 * After construction the attributes `_base_url` and `_default_model` become **read-only**; any attempt to overwrite them raises `AttributeError`
