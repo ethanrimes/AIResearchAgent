@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import json
 from core.utils.logging_utils import log_validation_results
+from core.agent.schemas.validation_checklist import get_requirement_description, get_manual_validation_description
+import subprocess
 
 def process_validation_checklist(critique_results: Dict[str, Any], validation_results: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, bool]]:
     """
@@ -26,8 +28,6 @@ def process_validation_checklist(critique_results: Dict[str, Any], validation_re
         - The combined and enriched validation checklist for display
         - A flattened dictionary with all requirements as keys and boolean values
     """
-    from core.agent.schemas.validation_checklist import get_requirement_description, get_manual_validation_description
-    from typing import Tuple
     
     logger = logging.getLogger("ai_research_agent.experiment_utils")
     
@@ -144,6 +144,30 @@ def process_validation_checklist(critique_results: Dict[str, Any], validation_re
     
     return enriched_checklist, flattened_validation
 
+def build_tree(directory: Path, prefix: str = "") -> list:
+    """
+    Builds a directory tree structure as a list of strings.
+    
+    Args:
+        directory: Path to the directory to build tree from.
+        prefix: Current prefix for the line (used for recursion).
+        
+    Returns:
+        list: A list of strings representing the directory tree.
+    """
+    tree_output = []
+    files = sorted(directory.glob("*"))
+    items = list(files)
+    for i, path in enumerate(items):
+        is_last = i == len(items) - 1
+        connector = "└── " if is_last else "├── "
+        tree_output.append(f"{prefix}{connector}{path.name}")
+        if path.is_dir():
+            next_prefix = prefix + ("    " if is_last else "│   ")
+            tree_output.extend(build_tree(path, next_prefix))
+    return tree_output
+
+
 def get_current_experiment_code(experiment_dir: Path) -> str:
     """
     Gets the current code in the experiment directory with file annotations.
@@ -162,19 +186,7 @@ def get_current_experiment_code(experiment_dir: Path) -> str:
     
     # Generate directory tree
     tree_output = ["# Experiment Directory Structure", "```"]
-    
-    def build_tree(directory, prefix=""):
-        files = sorted(directory.glob("*"))
-        items = list(files)
-        for i, path in enumerate(items):
-            is_last = i == len(items) - 1
-            connector = "└── " if is_last else "├── "
-            tree_output.append(f"{prefix}{connector}{path.name}")
-            if path.is_dir():
-                next_prefix = prefix + ("    " if is_last else "│   ")
-                build_tree(path, next_prefix)
-    
-    build_tree(experiment_dir)
+    tree_output.extend(build_tree(experiment_dir))
     tree_output.append("```\n")
     
     # Get all code files of specified types
@@ -631,3 +643,26 @@ def format_experiment_prompt(
     
     # Return both the formatted prompt and the flattened validation
     return "".join(prompt_parts), flattened_validation
+
+def save_and_commit(code_directory: Path, iteration: int):
+    """
+    Initializes git repo if not present, adds all files, and commits with iteration and directory tree.
+
+    Args:
+        code_directory (Path): The directory to commit.
+        iteration (int): The iteration number for the commit message.
+    """
+    # 1. Initialize git repo if missing
+    git_dir = code_directory / ".git"
+    if not git_dir.exists():
+        subprocess.run(["git", "init"], cwd=code_directory, check=True)
+    
+    # 2. Add all files in code_directory
+    subprocess.run(["git", "add", "."], cwd=code_directory, check=True)
+    
+    # 3. Build directory tree
+    tree = "\n".join(build_tree(code_directory))
+    
+    # 4. Commit with iteration and tree
+    commit_message = f"Iteration {iteration}\n{tree}"
+    subprocess.run(["git", "commit", "-m", commit_message], cwd=code_directory, check=True)

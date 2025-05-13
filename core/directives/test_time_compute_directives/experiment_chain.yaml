@@ -44,8 +44,8 @@ instructions: |
   - Iteratively refine your code, testing the entry point with the RunCodeTool. Do not leave until you have obtained satisfactory results from the experiment.
   - Write modular code: define one function per hypothesis and one for the baseline.
   - Use logging and error handling to make the experiment repeatable and debuggable.
-  - Run the full experiment and write the results (including correctness, reasoning trace, and timing) to a JSON file in /results.
-  - You may consult example code at /read_only/example for structure or inspiration, but do not copy code directly.
+  - The experiment should collect its final results (including correctness, reasoning trace, and timing) and write them to a JSON file /results/results_summary.json.
+  - Other experiment statistics are welcome to be written to other json files in /results
   
   - The final statistics your code generates should output to /results/results_summary.json the following schema:
   ```json

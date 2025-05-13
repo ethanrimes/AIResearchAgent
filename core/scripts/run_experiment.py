@@ -135,7 +135,7 @@ def main():
             logger.error(f"Agent run failed with error: {results['error']}")
             
         # Write the final results to a JSON file in the /results directory
-        run_summary_file = Path("/results/run_summary.json")
+        run_summary_file = Path("/logs/agent_summary_metrics.json")
         with open(run_summary_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2)
         logger.info(f"Run summary written to: {run_summary_file}")

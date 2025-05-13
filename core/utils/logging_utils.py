@@ -10,8 +10,9 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from core.utils.path_utils import get_active_run_timestamp
-from typing import Dict, Any, Optional
-
+from typing import Dict, Any, Optional, List, Tuple
+import time
+import json
 
 def setup_logging(run_dir=None, level=logging.INFO, log_name=None, capture_docker=True):
     """
@@ -93,6 +94,65 @@ def get_logger(name=None):
     # For child loggers, use the full namespace
     return logging.getLogger(f'ai_research_agent.{name}')
 
+def log_agent_invoke(agent_name: str, runtime: float, intermediate_steps: List[Tuple]):
+    """
+    Tracks agent invocation details in a JSON log file.
+    
+    Args:
+        agent_name (str): Name of the agent being tracked
+        runtime (float): Runtime in seconds for the invocation
+        intermediate_steps (List[Tuple]): LangChain intermediate steps containing tool calls
+    """
+    # Define log directory and file path
+    log_dir = Path("/logs")
+    log_file = log_dir / "agent_tracking.json"
+    
+    # Create logs directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Initialize or load existing data
+    if log_file.exists():
+        with open(log_file, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                # Handle case where file exists but is empty or malformed
+                data = {}
+    else:
+        data = {}
+    
+    # Ensure agent exists in data
+    if agent_name not in data:
+        data[agent_name] = {}
+    
+    # Process intermediate steps to extract tool calls
+    tool_calls = []
+    for step in intermediate_steps:
+        if len(step) >= 2:
+            # First element is the AgentActionMessageLog, second is the observation
+            agent_action = step[0]
+            if hasattr(agent_action, 'tool') and hasattr(agent_action, 'tool_input'):
+                tool_call = f"{agent_action.tool}: {agent_action.tool_input}"
+                tool_calls.append(tool_call)
+    
+    # Determine the next iteration ID
+    existing_iteration_ids = [int(key) for key in data[agent_name].keys() if key.isdigit()]
+    next_iteration_id = max(existing_iteration_ids, default=0) + 1
+    
+    # Create new invoke entry
+    invoke_data = {
+        "iteration_id": next_iteration_id,
+        "runtime_secs": runtime,
+        "tool_calls": tool_calls,
+        "num_tool_calls": len(tool_calls)
+    }
+    
+    # Add entry to data structure
+    data[agent_name][str(next_iteration_id)] = invoke_data
+    
+    # Write updated data back to file
+    with open(log_file, 'w') as f:
+        json.dump(data, f, indent=2)
 
 def log_validation_results(validation_results: Dict[str, Any], enriched_checklist: Optional[Dict[str, Any]] = None, iteration: int = 0) -> None:
     """

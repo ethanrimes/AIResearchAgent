@@ -7,6 +7,7 @@ LLM reasoning capacity, particularly for mathematical reasoning tasks.
 
 import json
 import logging
+import time  # Added import for timing
 from pathlib import Path
 from typing import Dict, Any
 
@@ -15,6 +16,7 @@ from langchain.prompts import PromptTemplate
 
 from core.agent.schemas.output_schemas import HypothesisOutput
 from core.utils.path_utils import get_active_run_path
+from core.utils.logging_utils import log_agent_invoke  # Added import for logging
 
 class HypothesisChain:
     """
@@ -76,6 +78,9 @@ class HypothesisChain:
         """
         self.logger.info("Running hypothesis generation")
         
+        # Start timing the execution
+        start_time = time.time()
+        
         # ------------------------------------------------------------------
         # Use direct path to hypothesis directory at root level
         # ------------------------------------------------------------------
@@ -98,5 +103,15 @@ class HypothesisChain:
         # Persist the result
         output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
         self.logger.info(f"Wrote hypotheses to {output_path}")
+        
+        # Calculate execution time
+        execution_time = time.time() - start_time
+        
+        # Log agent invocation details
+        log_agent_invoke(
+            agent_name="HypothesisChain",
+            runtime=execution_time,
+            intermediate_steps=[]  # HypothesisChain doesn't have intermediate steps to log
+        )
 
         return result.model_dump()

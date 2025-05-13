@@ -13,6 +13,9 @@ myagent-env/
 sandbox/writable/**/*.txt
 sandbox/writable/**/*.json
 sandbox/writable/**/*.log
+sandbox/writable/**/*.py
+sandbox/writable/**/*.sh
+sandbox/writable/**/*.yaml
 
 # Ignore all subdirectories (their contents)
 sandbox/writable/*/

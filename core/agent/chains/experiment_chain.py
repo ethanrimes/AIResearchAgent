@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Dict, List, Any
-from core.utils.experiment_utils import run_pyright_type_check, format_experiment_prompt, log_validation_results, process_validation_checklist
+from core.utils.experiment_utils import run_pyright_type_check, format_experiment_prompt, log_validation_results, process_validation_checklist, save_and_commit
+
 
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import BaseTool
@@ -41,6 +43,7 @@ from core.agent.tools.run_experiment import RunExperimentTool  # Add this import
 from core.agent.tools.run_code import RunCodeTool
 from core.utils.path_utils import get_active_run_path
 from core.utils.experiment_utils import get_current_experiment_code, validate_experiment_output
+from core.utils.logging_utils import log_agent_invoke
 
 # ----------------------------------------------------------------------
 class ExperimentChain:
@@ -220,7 +223,7 @@ class ExperimentChain:
             }
         """
         self.logger.info("=== ExperimentChain starting ===")
-
+        
         # Paths the agent must read
         plan_file = self.workspace["planning"] / "experiment_plan.json"
         results_json = self.results_dir / "results_summary.json"
@@ -302,10 +305,25 @@ class ExperimentChain:
             # ------------------------------------------------------------------
             error_information = None
             try:
+                # Start timing the individual agent invocation
+                invocation_start_time = time.time()
+                
                 # Invoke the agent with current input
                 agent_output = self.agent.invoke(current_input)
+                
                 # Save the output for next iteration
                 previous_output = agent_output.get("output", "")
+                
+                # Calculate the invocation time for this iteration
+                invocation_time = time.time() - invocation_start_time
+                
+                # Log only the current iteration's intermediate steps
+                log_agent_invoke(
+                    agent_name="ExperimentChain",
+                    runtime=invocation_time,
+                    intermediate_steps=agent_output.get("intermediate_steps", [])
+                )
+
             except Exception as e:
                 self.logger.error(f"Error during agent invocation: {e}")
                 error_information = f"Error during execution: {str(e)}"
@@ -376,6 +394,14 @@ class ExperimentChain:
                     self.logger.warning("VALIDATION: Manual checks not met - continuing to next iteration")
                 elif not all_requirements_met:
                     self.logger.warning("VALIDATION: Detailed requirements not met - continuing to next iteration")
+            
+            # Save and commit the code at the end of every iteration
+            try:
+                self.logger.info(f"Committing experiment code for iteration {current_iteration}")
+                save_and_commit(self.exp_dir, current_iteration)
+                self.logger.info(f"Successfully committed code for iteration {current_iteration}")
+            except Exception as e:
+                self.logger.error(f"Error during code commit for iteration {current_iteration}: {e}")
             
             # Increment iteration counter
             current_iteration += 1

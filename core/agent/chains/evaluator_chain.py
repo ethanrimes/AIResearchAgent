@@ -7,6 +7,7 @@ run by the ExperimentChain and producing the final findings.
 
 import json
 import logging
+import time  # Added import for timing
 from pathlib import Path
 from typing import Dict, Any
 
@@ -15,6 +16,7 @@ from langchain.prompts import PromptTemplate
 
 from core.agent.schemas.output_schemas import EvaluatorOutput
 from core.utils.path_utils import get_active_run_path
+from core.utils.logging_utils import log_agent_invoke  # Added import for logging
 
 class EvaluatorChain:
     """
@@ -84,6 +86,9 @@ class EvaluatorChain:
         """
         self.logger.info("Running result evaluation and generating findings")
         
+        # Start timing the execution
+        start_time = time.time()
+        
         # ------------------------------------------------------------------
         # Use direct path to findings directory at root level
         # ------------------------------------------------------------------
@@ -139,5 +144,15 @@ class EvaluatorChain:
         # Persist
         output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
         self.logger.info(f"Wrote final findings to {output_path}")
+        
+        # Calculate execution time
+        execution_time = time.time() - start_time
+        
+        # Log agent invocation details
+        log_agent_invoke(
+            agent_name="EvaluatorChain",
+            runtime=execution_time,
+            intermediate_steps=[]  # EvaluatorChain doesn't have intermediate steps to log
+        )
         
         return result.model_dump()

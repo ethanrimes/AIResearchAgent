@@ -17,6 +17,7 @@ from langchain.prompts import PromptTemplate
 from core.agent.schemas.output_schemas import CritiqueOutput
 from core.utils.path_utils import get_active_run_path
 from core.utils.experiment_utils import get_current_experiment_code, run_pyright_type_check
+from core.utils.logging_utils import log_agent_invoke  # Added import for logging
 
 
 class CritiqueChain:
@@ -83,6 +84,9 @@ class CritiqueChain:
         """
         self.logger.info("Running experiment code critique")
         
+        # Start timing the execution
+        start_time = time.time()
+        
         # ------------------------------------------------------------------
         # Use direct path to scratchpad directory at root level
         # ------------------------------------------------------------------
@@ -140,5 +144,15 @@ class CritiqueChain:
         # Persist results
         output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
         self.logger.info(f"Wrote critique results to {output_path}")
+        
+        # Calculate execution time
+        execution_time = time.time() - start_time
+        
+        # Log agent invocation details
+        log_agent_invoke(
+            agent_name="CritiqueChain",
+            runtime=execution_time,
+            intermediate_steps=[]  # CritiqueChain doesn't have intermediate steps to log
+        )
         
         return result.model_dump()
