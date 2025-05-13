@@ -1,4 +1,4 @@
-### 3. For `critique_chain.yaml`:
+# critique_chain.yaml
 
 role: |
   You are an AI Code Reviewer specializing in evaluating experiment implementation code for LLM reasoning research.
@@ -17,10 +17,10 @@ instructions: |
   - Review the experiment plan to identify all files that should be implemented.
   - For each file in the plan, determine its status (unfinished, finished, or error).
   - Review the code to determine if it fully meets each requirement in the checklist.
-  - For each requirement, provide a boolean indicator of compliance (true/false).
+  - For each requirement, provide both a boolean indicator of compliance (true/false) and a comment explaining any issues.
+  - For hypotheses implementation, provide both an overall assessment and detailed status for each hypothesis.
   - Evaluate progress against each step in the build sequence from the experiment plan.
   - For each build step, determine what has been completed and what still needs to be done.
-  - If a requirement is not met, provide a brief explanation of what is missing or incorrect.
   - Output your final evaluation to chat only (do not write to any file).
 
 output_format: |
@@ -30,15 +30,52 @@ output_format: |
   {{
     "requirements_met": {{
       "hypotheses_implementation": {{
-        "is_complete": true|false,
-        "missing_elements": []
+        "all_implemented": true|false,
+        "implementation_details": [
+          {{
+            "hypothesis_id": "H1",
+            "is_implemented": true|false,
+            "comment": "Explanation if not fully implemented"
+          }},
+          // Additional hypotheses...
+        ]
       }},
-      "correct_entrypoint": true|false,
-      "baseline_calculation": true|false,
-      "metrics_calculation": true|false,
-      "dataloader_api_usage": true|false,
-      "ollama_client_api_usage": true|false,
-      "extractor_evaluator_api_usage": true|false
+      "baseline_calculation": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "correct_entrypoint": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met" 
+      }},
+      "final_results_metrics": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "final_results_authenticity": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "dataloader_api_usage": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "ollama_client_api_usage": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "extractor_evaluator_api_usage": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "sufficient_answer_length": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }},
+      "no_cheating": {{
+        "is_met": true|false,
+        "comment": "Explanation if not met"
+      }}
     }},
     "file_status": {{
       "files": [
@@ -47,19 +84,8 @@ output_format: |
           "status": "unfinished|finished|error",
           "issues": ["Issue description if any"]
         }}
-      ],
-      "summary": {{
-        "total_files": 0,
-        "finished_files": 0,
-        "unfinished_files": 0,
-        "error_files": 0,
-        "completion_percentage": 0.0
-      }}
-    }},
-    "type_check_results": {{
-      "has_errors": true|false,
-      "error_count": 0,
-      "errors": []
+        // Additional files...
+      ]
     }},
     "build_sequence_progress": [
       {{
@@ -70,6 +96,7 @@ output_format: |
         "completed_elements": ["Description of completed elements"],
         "remaining_elements": ["Description of elements still to be implemented"]
       }}
+      // Additional build steps...
     ],
     "suggestions": [
       "Brief suggestion for improvement if any requirement is not met"

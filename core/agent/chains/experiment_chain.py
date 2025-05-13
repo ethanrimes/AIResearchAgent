@@ -20,7 +20,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Any
-from core.utils.experiment_utils import run_pyright_type_check, format_experiment_prompt, log_validation_results
+from core.utils.experiment_utils import run_pyright_type_check, format_experiment_prompt, log_validation_results, process_validation_checklist
 
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import BaseTool
@@ -259,8 +259,11 @@ class ExperimentChain:
                     run_bash_tool=self.run_bash_tool
                 )
                 
-                # Store bash output for reporting
-                bash_output = validation_results.get("bash_output", "")
+                # Store bash output for reporting (only the output portion from the tuple)
+                if isinstance(validation_results.get("bash_output"), tuple) and len(validation_results.get("bash_output")) >= 1:
+                    bash_output = validation_results.get("bash_output")[0]
+                else:
+                    bash_output = validation_results.get("bash_output", "")
             
             # Format the prompt using the utility function and get flattened validation
             input_content, flattened_validation = format_experiment_prompt(
@@ -304,55 +307,62 @@ class ExperimentChain:
                 self.ENTRY_SCRIPT,
                 run_bash_tool=self.run_bash_tool
             )
-            
+
             # Get updated flattened validation after the agent has made changes
-            _, updated_flattened_validation = format_experiment_prompt(
-                iteration=current_iteration + 1,  # For next iteration
-                directive=self.directive,
-                experiment_dir=self.exp_dir,
-                entry_script=self.ENTRY_SCRIPT,
-                plan_data=plan_data,
-                previous_output=previous_output,
-                error_information=error_information,
-                type_check_results=type_check_results,
-                critique_results=critique_results,
-                validation_results=validation_results
+            critique_output = None
+            if self.critique_chain:
+                try:
+                    self.logger.info("Running final critique check for validation")
+                    critique_output = self.critique_chain.run()
+                    self.logger.info("Final critique completed successfully")
+                except Exception as e:
+                    self.logger.error(f"Error running final critique check: {e}")
+
+            # Process the validation checklist
+            enriched_checklist, flattened_validation = process_validation_checklist(
+                critique_output, validation_results
             )
-            
+
+            # Log validation results with clear prefacing
+            log_validation_results(validation_results, enriched_checklist, current_iteration)
+
             # Update bash_output from validation results
-            bash_output = validation_results.get("bash_output", "")
-            
-            # Check if validation passed based on flattened validation
-            # First, ensure basic file requirements are met
+            if isinstance(validation_results.get("bash_output"), tuple) and len(validation_results.get("bash_output")) >= 1:
+                bash_output = validation_results.get("bash_output")[0]
+            else:
+                bash_output = validation_results.get("bash_output", "")
+
+            # Basic requirements are file-level checks plus bash execution success
             basic_requirements_met = all([
                 validation_results.get("entry_script_exists", False),
                 validation_results.get("python_files_exist", False),
-                validation_results.get("results_file_exists", False)
+                validation_results.get("results_file_exists", False),
+                validation_results.get("bash_execution_success", False)  # Include bash execution success
             ])
-            
-            # Then check if all other detailed requirements are met
-            all_requirements_met = False
-            if updated_flattened_validation:
-                # Only consider it passed if ALL requirements are met (and there is at least one requirement)
-                all_requirements_met = all(updated_flattened_validation.values()) and len(updated_flattened_validation) > 0
+
+            # Log all validation requirements for clarity
+            total_reqs = len(flattened_validation)
+            passed_reqs = sum(1 for v in flattened_validation.values() if v)
+            self.logger.info(f"VALIDATION STATUS: {passed_reqs}/{total_reqs} requirements met")
+
+            # List unmet requirements for debugging
+            unmet = [k for k, v in flattened_validation.items() if not v]
+            if unmet:
+                self.logger.info(f"UNMET REQUIREMENTS: {', '.join(unmet)}")
+
+            # Validation passes only if ALL requirements are met
+            all_requirements_met = len(flattened_validation) > 0 and all(flattened_validation.values())
+            validation_passed = all_requirements_met
                 
-                # Count how many requirements are met
-                met_count = sum(1 for v in updated_flattened_validation.values() if v)
-                total_count = len(updated_flattened_validation)
-                self.logger.info(f"VALIDATION: {met_count}/{total_count} requirements met")
-            
-            # Decide if validation passes based on both basic and detailed requirements
-            if basic_requirements_met and (all_requirements_met or (not critique_results and current_iteration > 0)):
+            self.logger.info(f"VALIDATION: Comprehensive check - Manual: {basic_requirements_met}, All requirements: {all_requirements_met}")
+
+            if validation_passed:
                 self.logger.info("VALIDATION: Final validation PASSED - all checks successful")
-                validation_passed = True
             else:
-                reasons = []
                 if not basic_requirements_met:
-                    reasons.append("basic file requirements not met")
-                if not all_requirements_met and updated_flattened_validation:
-                    reasons.append("detailed requirements not met")
-                
-                self.logger.warning(f"VALIDATION: Final validation FAILED ({', '.join(reasons)}) - continuing to next iteration")
+                    self.logger.warning("VALIDATION: Manual checks not met - continuing to next iteration")
+                elif not all_requirements_met:
+                    self.logger.warning("VALIDATION: Detailed requirements not met - continuing to next iteration")
             
             # Increment iteration counter
             current_iteration += 1
@@ -383,7 +393,7 @@ class ExperimentChain:
             results_dict: Dict[str, Any] = json.loads(results_json.read_text())
             self.logger.info("VALIDATION: Successfully parsed results_summary.json")
             self.logger.info("VALIDATION: Results summary contains %d keys: %s", 
-                           len(results_dict), ", ".join(results_dict.keys()))
+                        len(results_dict), ", ".join(results_dict.keys()))
         except Exception as e:
             self.logger.error("VALIDATION: Failed to parse results JSON: %s", e)
             raise

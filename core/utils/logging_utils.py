@@ -99,7 +99,7 @@ def log_validation_results(validation_results: Dict[str, Any], enriched_checklis
     Log validation results with clear prefacing.
     
     Args:
-        validation_results: Dictionary containing validation results.
+        validation_results: Dictionary containing basic validation results.
         enriched_checklist: Optional enriched checklist from process_validation_checklist.
         iteration: Current iteration number.
     """
@@ -117,32 +117,39 @@ def log_validation_results(validation_results: Dict[str, Any], enriched_checklis
     logger.info("VALIDATION: Results file exists: %s", 
                    "✓ PASS" if validation_results.get("results_file_exists", False) else "✗ FAIL")
     
+    # Add check for bash execution success (new)
+    if "bash_execution_success" in validation_results:
+        logger.info("VALIDATION: Bash execution success: %s", 
+                   "✓ PASS" if validation_results.get("bash_execution_success", False) else "✗ FAIL")
+    
     # Log enriched validation if available
-    if enriched_checklist:
+    if enriched_checklist and len(enriched_checklist) > 3:  # More than just the basic checks
         logger.info("-" * 50)
         logger.info("DETAILED VALIDATION CHECKS:")
         
         # Log regular requirements
         for key, value in enriched_checklist.items():
-            if key not in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
-                if isinstance(value, dict) and "is_met" in value:
-                    status = "✓ PASS" if value["is_met"] else "✗ FAIL"
-                    logger.info("VALIDATION: %s: %s", value.get("description", key), status)
-                    if value.get("comment") and not value["is_met"]:
-                        logger.info("   Comment: %s", value["comment"])
-                elif key == "hypotheses_implementation":
-                    # Special handling for hypotheses
-                    all_implemented = value.get("all_implemented", False)
-                    status = "✓ PASS" if all_implemented else "✗ FAIL"
-                    logger.info("VALIDATION: %s: %s", value.get("description", key), status)
-                    
-                    # Log individual hypothesis details
-                    if "implementation_details" in value:
-                        for detail in value["implementation_details"]:
-                            hyp_status = "✓ PASS" if detail.get("is_implemented", False) else "✗ FAIL"
-                            logger.info("   - Hypothesis %s: %s", detail.get("hypothesis_id", "?"), hyp_status)
-                            if detail.get("comment") and not detail.get("is_implemented", False):
-                                logger.info("     Comment: %s", detail["comment"])
+            # Skip the basic checks already logged above
+            if key not in ["entry_script_exists", "python_files_exist", "results_file_exists", "bash_execution_success"]:
+                if isinstance(value, dict):
+                    if "is_met" in value:
+                        status = "✓ PASS" if value["is_met"] else "✗ FAIL"
+                        logger.info("VALIDATION: %s: %s", value.get("description", key), status)
+                        if value.get("comment") and not value["is_met"]:
+                            logger.info("   Comment: %s", value["comment"])
+                    elif key == "hypotheses_implementation" and "all_implemented" in value:
+                        # Special handling for hypotheses
+                        all_implemented = value.get("all_implemented", False)
+                        status = "✓ PASS" if all_implemented else "✗ FAIL"
+                        logger.info("VALIDATION: %s: %s", value.get("description", key), status)
+                        
+                        # Log individual hypothesis details
+                        if "implementation_details" in value:
+                            for detail in value["implementation_details"]:
+                                hyp_status = "✓ PASS" if detail.get("is_implemented", False) else "✗ FAIL"
+                                logger.info("   - Hypothesis %s: %s", detail.get("hypothesis_id", "?"), hyp_status)
+                                if detail.get("comment") and not detail.get("is_implemented", False):
+                                    logger.info("     Comment: %s", detail["comment"])
     
     # Log all errors if any
     if validation_results.get("errors"):
@@ -162,27 +169,32 @@ def log_validation_results(validation_results: Dict[str, Any], enriched_checklis
         logger.info("VALIDATION: Bash execution output preview:\n%s", preview)
     
     # Determine overall status based on enriched checklist if available
-    if enriched_checklist:
+    if enriched_checklist and len(enriched_checklist) > 3:  # More than just the basic checks
         all_passed = True
-        for key, value in enriched_checklist.items():
-            if isinstance(value, dict) and "is_met" in value:
-                if not value["is_met"]:
-                    all_passed = False
-                    break
-            elif key == "hypotheses_implementation":
-                if not value.get("all_implemented", False):
-                    all_passed = False
-                    break
+        failed_checks = []
         
-        logger.info("VALIDATION: Overall status: %s", 
-                       "✓ PASSED" if all_passed else "✗ FAILED")
+        for key, value in enriched_checklist.items():
+            if isinstance(value, dict):
+                if "is_met" in value and not value["is_met"]:
+                    all_passed = False
+                    failed_checks.append(key)
+                elif key == "hypotheses_implementation" and "all_implemented" in value and not value["all_implemented"]:
+                    all_passed = False
+                    failed_checks.append(key)
+        
+        if failed_checks:
+            logger.info("VALIDATION: Overall status: ✗ FAILED - Failing checks: %s", ", ".join(failed_checks))
+        else:
+            logger.info("VALIDATION: Overall status: ✓ PASSED - All checks successful")
     else:
-        # Fall back to basic validation
+        # Fall back to basic validation with added bash execution check
+        basic_passed = all([
+            validation_results.get("entry_script_exists", False),
+            validation_results.get("python_files_exist", False), 
+            validation_results.get("results_file_exists", False),
+            validation_results.get("bash_execution_success", True)  # Default to True if not present for backward compatibility
+        ])
         logger.info("VALIDATION: Basic validation status: %s", 
-                       "✓ PASSED" if all([
-                           validation_results.get("entry_script_exists", False),
-                           validation_results.get("python_files_exist", False), 
-                           validation_results.get("results_file_exists", False)
-                       ]) else "✗ FAILED")
+                       "✓ PASSED" if basic_passed else "✗ FAILED")
     
     logger.info("=" * 50)

@@ -12,10 +12,10 @@ from typing import Dict, Any, List, Optional, Tuple
 import json
 from core.utils.logging_utils import log_validation_results
 
-def process_validation_checklist(critique_results: Dict[str, Any], validation_results: Dict[str, Any]) -> Dict[str, bool]:
+def process_validation_checklist(critique_results: Dict[str, Any], validation_results: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, bool]]:
     """
     Process and enrich the validation checklist with descriptions, 
-    and return a flattened dictionary of pass/fail statuses.
+    and return a flattened dictionary of pass/fail statuses for all requirements.
     
     Args:
         critique_results: Results from the critique chain.
@@ -27,69 +27,120 @@ def process_validation_checklist(critique_results: Dict[str, Any], validation_re
         - A flattened dictionary with all requirements as keys and boolean values
     """
     from core.agent.schemas.validation_checklist import get_requirement_description, get_manual_validation_description
+    from typing import Tuple
+    
+    logger = logging.getLogger("ai_research_agent.experiment_utils")
     
     enriched_checklist = {}
     flattened_validation = {}
     
-    # Process critique results if available
-    if critique_results and "requirements_met" in critique_results:
-        requirements_met = critique_results["requirements_met"]
-        
-        # Enrich each requirement with its description
-        for req_key in requirements_met:
-            if req_key == "hypotheses_implementation":
-                # Special handling for hypotheses_implementation since it's nested
-                hyp_impl = requirements_met[req_key]
-                hyp_impl["description"] = get_requirement_description(req_key)
-                
-                # Add the overall hypothesis implementation status
-                flattened_validation["hypotheses_implementation"] = hyp_impl.get("all_implemented", False)
-                
-                # Enrich each hypothesis detail and flatten individual hypothesis statuses
-                if "implementation_details" in hyp_impl:
-                    for detail in hyp_impl["implementation_details"]:
-                        detail["description"] = f"Implementation of hypothesis {detail['hypothesis_id']}"
-                        # Add individual hypothesis status to flattened dict
-                        flattened_validation[f"hypothesis_{detail['hypothesis_id']}"] = detail.get("is_implemented", False)
-                
-                enriched_checklist[req_key] = hyp_impl
-            else:
-                # Regular requirement
-                req_data = requirements_met[req_key]
-                if isinstance(req_data, dict):
-                    req_data["description"] = get_requirement_description(req_key)
-                    enriched_checklist[req_key] = req_data
-                    # Add to flattened validation
-                    flattened_validation[req_key] = req_data.get("is_met", False)
-                else:
-                    # Legacy format without comments
-                    enriched_checklist[req_key] = {
-                        "is_met": req_data,
-                        "description": get_requirement_description(req_key),
-                        "comment": ""
-                    }
-                    # Add to flattened validation
-                    flattened_validation[req_key] = bool(req_data)
-    
-    # Add manual validation results
+    # First add manual validation results - these should always be present
     if validation_results:
         for key in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
             if key in validation_results:
                 is_met = validation_results[key]
-                enriched_checklist[key] = {
+                
+                # Create enriched entry
+                enriched_entry = {
                     "is_met": is_met,
                     "description": get_manual_validation_description(key),
                     "comment": ""
                 }
-                # Add to flattened validation
-                flattened_validation[key] = is_met
                 
                 # Add error information if present
                 if validation_results.get("errors") and not is_met:
                     for error in validation_results["errors"]:
                         if key.split("_")[0] in error.lower():
-                            enriched_checklist[key]["comment"] = error
+                            enriched_entry["comment"] = error
                             break
+                
+                enriched_checklist[key] = enriched_entry
+                flattened_validation[key] = is_met
+    
+    # Process critique results if available
+    if critique_results:
+        logger.info("Processing critique results for validation checklist")
+        
+        # Extract requirements_met from different possible structures
+        requirements_met = None
+        if isinstance(critique_results, dict):
+            if "requirements_met" in critique_results:
+                requirements_met = critique_results["requirements_met"]
+            else:
+                logger.warning(f"Critique results missing 'requirements_met' key. Keys found: {list(critique_results.keys())}")
+        
+        # Process requirements if found
+        if requirements_met and isinstance(requirements_met, dict):
+            # Log the requirements structure
+            logger.info(f"Found {len(requirements_met)} requirements in critique results")
+            
+            # Process each requirement
+            for req_key, req_value in requirements_met.items():
+                if req_key == "hypotheses_implementation":
+                    # Special handling for hypotheses_implementation
+                    if isinstance(req_value, dict):
+                        # Check if it has the expected structure
+                        if "all_implemented" in req_value:
+                            all_implemented = req_value["all_implemented"]
+                            
+                            # Create enriched entry
+                            hyp_impl = {
+                                "all_implemented": all_implemented,
+                                "description": get_requirement_description(req_key),
+                                "implementation_details": []
+                            }
+                            
+                            # Add individual hypothesis details if present
+                            if "implementation_details" in req_value and isinstance(req_value["implementation_details"], list):
+                                for detail in req_value["implementation_details"]:
+                                    if isinstance(detail, dict) and "hypothesis_id" in detail and "is_implemented" in detail:
+                                        detail_id = detail["hypothesis_id"]
+                                        is_implemented = detail["is_implemented"]
+                                        
+                                        # Add to implementation details
+                                        hyp_impl["implementation_details"].append({
+                                            "hypothesis_id": detail_id,
+                                            "is_implemented": is_implemented,
+                                            "description": f"Implementation of hypothesis {detail_id}",
+                                            "comment": detail.get("comment", "")
+                                        })
+                                        
+                                        # Add to flattened validation
+                                        flattened_validation[f"hypothesis_{detail_id}"] = is_implemented
+                            
+                            # Add to enriched checklist and flattened validation
+                            enriched_checklist[req_key] = hyp_impl
+                            flattened_validation[req_key] = all_implemented
+                        else:
+                            logger.warning(f"Hypotheses implementation missing 'all_implemented' key")
+                    else:
+                        logger.warning(f"Unexpected format for hypotheses_implementation: {type(req_value)}")
+                else:
+                    # Standard requirement
+                    if isinstance(req_value, dict) and "is_met" in req_value:
+                        # Standard format with RequirementDetail
+                        is_met = req_value["is_met"]
+                        
+                        # Create enriched entry
+                        enriched_entry = {
+                            "is_met": is_met,
+                            "description": get_requirement_description(req_key),
+                            "comment": req_value.get("comment", "")
+                        }
+                        
+                        # Add to enriched checklist and flattened validation
+                        enriched_checklist[req_key] = enriched_entry
+                        flattened_validation[req_key] = is_met
+                    else:
+                        logger.warning(f"Unexpected format for requirement {req_key}: {type(req_value)}")
+        else:
+            logger.warning("No valid requirements found in critique results")
+    else:
+        logger.info("No critique results available for validation checklist")
+    
+    # Log summary of flattened validation
+    logger.info(f"Validation checklist contains {len(enriched_checklist)} items")
+    logger.info(f"Flattened validation contains {len(flattened_validation)} checks")
     
     return enriched_checklist, flattened_validation
 
@@ -156,6 +207,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
         "entry_script_exists": False,
         "python_files_exist": False,
         "results_file_exists": False,
+        "bash_execution_success": False,  # New field for bash return code check
         "bash_output": "",
         "errors": []
     }
@@ -188,9 +240,21 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
             logger.info(f"EXECUTING EXPERIMENT SCRIPT: {entry_script_path}")
             logger.info("=" * 100)
             
-            # The RunBashTool._run method now handles the timeout from the tool instance
-            bash_output = run_bash_tool._run(command=f"bash {entry_script_path}")
-            validation_results["bash_output"] = bash_output
+            # The RunBashTool._run method now returns a tuple (output, return_code)
+            result_tuple = run_bash_tool._run(command=f"bash {entry_script_path}")
+            
+            # Check if result is a tuple (output, return_code)
+            if isinstance(result_tuple, tuple) and len(result_tuple) == 2:
+                bash_output, return_code = result_tuple
+                validation_results["bash_output"] = bash_output
+                # Set bash_execution_success based on return code (0 means success)
+                validation_results["bash_execution_success"] = (return_code == 0)
+                if return_code != 0:
+                    validation_results["errors"].append(f"Bash script execution failed with return code {return_code}")
+            else:
+                # Handle backward compatibility if _run doesn't return a tuple
+                validation_results["bash_output"] = result_tuple
+                logger.warning("RunBashTool._run did not return a return code. Cannot verify execution success.")
             
             # Add another wide log statement after execution
             logger.info("=" * 100)
@@ -211,6 +275,7 @@ def validate_experiment_output(experiment_dir: Path, results_dir: Path, entry_sc
     
     logger.info(f"Validation results: {validation_results}")
     return validation_results
+
 
 def update_memory_with_steps(memory, steps_in_memory, agent_output):
     """
@@ -373,6 +438,7 @@ def format_experiment_prompt(
     
     # Initialize an empty flattened validation dictionary
     flattened_validation = {}
+    enriched_checklist = {}
     
     # Create the shared base prompt (for all iterations)
     prompt_parts = [
@@ -428,8 +494,10 @@ def format_experiment_prompt(
     # Add environment constraints
     prompt_parts.append(
         "# Environment Constraints\n"
-        "- The LLM used in this experiment has a context window of 32768 tokens. Ensure enough generated tokens before termination or the LLM may not generate a final answer.\n"
-        "- The runtime environment has limited computational resources and memory\n"
+        "- The LLM used in this experiment has a context window of 32768 tokens\n"
+        "- The LLM will think for an extended period surrounding thinking in <think></think> tokens\n"
+        "- Given the extended thinking time of this model, ensure that the model has sufficient tokens to arrive at answer\n"
+        "- The runtime environment has limited computational resources\n"
         "- Consider these constraints when designing and optimizing your implementation\n"
         "- Inform the reasoner model that it must wrap final answers inside of \\boxed{{}}\n\n"
     )
@@ -453,46 +521,40 @@ def format_experiment_prompt(
                 type_check_section = "# Type Check Results\nNo type errors found.\n\n"
             prompt_parts.append(type_check_section)
         
-        # Process and enrich the validation checklist
-        enriched_checklist = None
-        
+        # Process validation results
         if critique_results and validation_results:
-            # Process and get both the enriched checklist and flattened validation
+            # Get enriched checklist and flattened validation
             enriched_checklist, flattened_validation = process_validation_checklist(
                 critique_results, validation_results
             )
             
-            # Add enriched checklist to the prompt
+            # Add the enriched checklist to the prompt
             prompt_parts.append(f"# Validation Checklist\n```json\n{json.dumps(enriched_checklist, indent=2)}\n```\n\n")
             
-            # Log validation results with enriched data
+            # Log the validation results
             log_validation_results(validation_results, enriched_checklist, iteration-1)
             
         elif validation_results:
-            # Just include basic validation results
-            basic_validation = {
-                "entry_script_exists": {
-                    "is_met": validation_results.get("entry_script_exists", False),
-                    "description": "Whether the entry script exists and is not empty"
-                },
-                "python_files_exist": {
-                    "is_met": validation_results.get("python_files_exist", False),
-                    "description": "Whether Python files exist in the experiment directory"
-                },
-                "results_file_exists": {
-                    "is_met": validation_results.get("results_file_exists", False),
-                    "description": "Whether the results_summary.json file exists"
-                }
-            }
+            # Create minimal enriched checklist for basic validation
+            basic_enriched = {}
+            for key in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
+                if key in validation_results:
+                    is_met = validation_results[key]
+                    from core.agent.schemas.validation_checklist import get_manual_validation_description
+                    
+                    basic_enriched[key] = {
+                        "is_met": is_met,
+                        "description": get_manual_validation_description(key),
+                        "comment": ""
+                    }
+                    
+                    # Add to flattened validation
+                    flattened_validation[key] = is_met
             
             # Add to prompt
-            prompt_parts.append(f"# Validation Checks\n```json\n{json.dumps(basic_validation, indent=2)}\n```\n\n")
+            prompt_parts.append(f"# Basic Validation Checks\n```json\n{json.dumps(basic_enriched, indent=2)}\n```\n\n")
             
-            # Add to flattened validation
-            for key in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
-                flattened_validation[key] = validation_results.get(key, False)
-            
-            # Log basic validation results
+            # Log validation results
             log_validation_results(validation_results, None, iteration-1)
         
         # Add bash output if available
@@ -505,6 +567,17 @@ def format_experiment_prompt(
             "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
             f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
         )
+    
+    # Log summary of validation status
+    if flattened_validation:
+        met_count = sum(1 for v in flattened_validation.values() if v)
+        total_count = len(flattened_validation)
+        logger.info(f"VALIDATION STATUS: {met_count}/{total_count} requirements met")
+        
+        # List unmet requirements for debugging
+        unmet = [k for k, v in flattened_validation.items() if not v]
+        if unmet:
+            logger.info(f"UNMET REQUIREMENTS: {', '.join(unmet)}")
     
     # Return both the formatted prompt and the flattened validation
     return "".join(prompt_parts), flattened_validation

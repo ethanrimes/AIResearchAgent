@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from pydantic import BaseModel, Field
 
 
@@ -67,6 +67,7 @@ class RunBashInput(BaseModel):
 
 class RunBashOutput(BaseModel):
     output: str
+    return_code: int = Field(0, description="Return code of the command (0 for success, non-zero for error)")
 
 
 # ──────────────────────────
