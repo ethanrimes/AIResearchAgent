@@ -141,7 +141,7 @@ class ExperimentChain:
 
         self.run_bash_tool = RunBashTool(
             working_dir="/experiment", 
-            output_dir="/results",
+            output_dir="/scratchpad",
             timeout=self.bash_timeout
         )
 
@@ -258,14 +258,12 @@ class ExperimentChain:
                     self.ENTRY_SCRIPT,
                     run_bash_tool=self.run_bash_tool
                 )
-                # Log validation results with clear prefacing
-                log_validation_results(validation_results, current_iteration-1)
                 
                 # Store bash output for reporting
                 bash_output = validation_results.get("bash_output", "")
             
-            # Format the prompt using the utility function
-            input_content = format_experiment_prompt(
+            # Format the prompt using the utility function and get flattened validation
+            input_content, flattened_validation = format_experiment_prompt(
                 iteration=current_iteration,
                 directive=self.directive,
                 experiment_dir=self.exp_dir,
@@ -307,22 +305,54 @@ class ExperimentChain:
                 run_bash_tool=self.run_bash_tool
             )
             
-            # Log validation results with clear prefacing
-            log_validation_results(validation_results, current_iteration)
+            # Get updated flattened validation after the agent has made changes
+            _, updated_flattened_validation = format_experiment_prompt(
+                iteration=current_iteration + 1,  # For next iteration
+                directive=self.directive,
+                experiment_dir=self.exp_dir,
+                entry_script=self.ENTRY_SCRIPT,
+                plan_data=plan_data,
+                previous_output=previous_output,
+                error_information=error_information,
+                type_check_results=type_check_results,
+                critique_results=critique_results,
+                validation_results=validation_results
+            )
             
             # Update bash_output from validation results
             bash_output = validation_results.get("bash_output", "")
             
-            # All three conditions must be true for validation to pass
-            if all([
-                validation_results["entry_script_exists"],
-                validation_results["python_files_exist"],
-                validation_results["results_file_exists"]
-            ]):
+            # Check if validation passed based on flattened validation
+            # First, ensure basic file requirements are met
+            basic_requirements_met = all([
+                validation_results.get("entry_script_exists", False),
+                validation_results.get("python_files_exist", False),
+                validation_results.get("results_file_exists", False)
+            ])
+            
+            # Then check if all other detailed requirements are met
+            all_requirements_met = False
+            if updated_flattened_validation:
+                # Only consider it passed if ALL requirements are met (and there is at least one requirement)
+                all_requirements_met = all(updated_flattened_validation.values()) and len(updated_flattened_validation) > 0
+                
+                # Count how many requirements are met
+                met_count = sum(1 for v in updated_flattened_validation.values() if v)
+                total_count = len(updated_flattened_validation)
+                self.logger.info(f"VALIDATION: {met_count}/{total_count} requirements met")
+            
+            # Decide if validation passes based on both basic and detailed requirements
+            if basic_requirements_met and (all_requirements_met or (not critique_results and current_iteration > 0)):
                 self.logger.info("VALIDATION: Final validation PASSED - all checks successful")
                 validation_passed = True
             else:
-                self.logger.warning("VALIDATION: Final validation FAILED - continuing to next iteration")
+                reasons = []
+                if not basic_requirements_met:
+                    reasons.append("basic file requirements not met")
+                if not all_requirements_met and updated_flattened_validation:
+                    reasons.append("detailed requirements not met")
+                
+                self.logger.warning(f"VALIDATION: Final validation FAILED ({', '.join(reasons)}) - continuing to next iteration")
             
             # Increment iteration counter
             current_iteration += 1

@@ -7,6 +7,7 @@ and providing structured feedback without using any external tools.
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -84,7 +85,9 @@ class CritiqueChain:
         # ------------------------------------------------------------------
         # Use direct path to scratchpad directory at root level
         # ------------------------------------------------------------------
-        output_path = Path("/scratchpad/critique_results.json")
+        # Generate timestamp for unique filename
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        output_path = Path(f"/scratchpad/{ts}_critique_results.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Get current experiment code using direct path

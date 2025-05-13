@@ -8,8 +8,90 @@ validating experiment outputs, and managing memory during iterations.
 import os
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import json
+from core.utils.logging_utils import log_validation_results
+
+def process_validation_checklist(critique_results: Dict[str, Any], validation_results: Dict[str, Any]) -> Dict[str, bool]:
+    """
+    Process and enrich the validation checklist with descriptions, 
+    and return a flattened dictionary of pass/fail statuses.
+    
+    Args:
+        critique_results: Results from the critique chain.
+        validation_results: Results from the manual validation.
+        
+    Returns:
+        Tuple containing:
+        - The combined and enriched validation checklist for display
+        - A flattened dictionary with all requirements as keys and boolean values
+    """
+    from core.agent.schemas.validation_checklist import get_requirement_description, get_manual_validation_description
+    
+    enriched_checklist = {}
+    flattened_validation = {}
+    
+    # Process critique results if available
+    if critique_results and "requirements_met" in critique_results:
+        requirements_met = critique_results["requirements_met"]
+        
+        # Enrich each requirement with its description
+        for req_key in requirements_met:
+            if req_key == "hypotheses_implementation":
+                # Special handling for hypotheses_implementation since it's nested
+                hyp_impl = requirements_met[req_key]
+                hyp_impl["description"] = get_requirement_description(req_key)
+                
+                # Add the overall hypothesis implementation status
+                flattened_validation["hypotheses_implementation"] = hyp_impl.get("all_implemented", False)
+                
+                # Enrich each hypothesis detail and flatten individual hypothesis statuses
+                if "implementation_details" in hyp_impl:
+                    for detail in hyp_impl["implementation_details"]:
+                        detail["description"] = f"Implementation of hypothesis {detail['hypothesis_id']}"
+                        # Add individual hypothesis status to flattened dict
+                        flattened_validation[f"hypothesis_{detail['hypothesis_id']}"] = detail.get("is_implemented", False)
+                
+                enriched_checklist[req_key] = hyp_impl
+            else:
+                # Regular requirement
+                req_data = requirements_met[req_key]
+                if isinstance(req_data, dict):
+                    req_data["description"] = get_requirement_description(req_key)
+                    enriched_checklist[req_key] = req_data
+                    # Add to flattened validation
+                    flattened_validation[req_key] = req_data.get("is_met", False)
+                else:
+                    # Legacy format without comments
+                    enriched_checklist[req_key] = {
+                        "is_met": req_data,
+                        "description": get_requirement_description(req_key),
+                        "comment": ""
+                    }
+                    # Add to flattened validation
+                    flattened_validation[req_key] = bool(req_data)
+    
+    # Add manual validation results
+    if validation_results:
+        for key in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
+            if key in validation_results:
+                is_met = validation_results[key]
+                enriched_checklist[key] = {
+                    "is_met": is_met,
+                    "description": get_manual_validation_description(key),
+                    "comment": ""
+                }
+                # Add to flattened validation
+                flattened_validation[key] = is_met
+                
+                # Add error information if present
+                if validation_results.get("errors") and not is_met:
+                    for error in validation_results["errors"]:
+                        if key.split("_")[0] in error.lower():
+                            enriched_checklist[key]["comment"] = error
+                            break
+    
+    return enriched_checklist, flattened_validation
 
 def get_current_experiment_code(experiment_dir: Path) -> str:
     """
@@ -263,7 +345,7 @@ def format_experiment_prompt(
     type_check_results: Dict[str, Any] = None,
     critique_results: Dict[str, Any] = None,
     validation_results: Dict[str, Any] = None
-) -> str:
+) -> Tuple[str, Dict[str, bool]]:
     """
     Format the prompt for the experiment agent based on the current iteration.
     
@@ -280,9 +362,17 @@ def format_experiment_prompt(
         validation_results: Optional validation results.
         
     Returns:
-        str: Formatted prompt for the agent.
+        Tuple containing:
+        - The formatted prompt string
+        - A dictionary with flattened validation results (requirement -> bool)
     """
+    from typing import Tuple
+    from core.utils.logging_utils import log_validation_results
+    
     logger = logging.getLogger("ai_research_agent.experiment_utils")
+    
+    # Initialize an empty flattened validation dictionary
+    flattened_validation = {}
     
     # Create the shared base prompt (for all iterations)
     prompt_parts = [
@@ -363,74 +453,58 @@ def format_experiment_prompt(
                 type_check_section = "# Type Check Results\nNo type errors found.\n\n"
             prompt_parts.append(type_check_section)
         
-        # Add critique results if available
-        if critique_results:
-            prompt_parts.append(f"# Critique Results\n```json\n{json.dumps(critique_results, indent=2)}\n```\n\n")
+        # Process and enrich the validation checklist
+        enriched_checklist = None
         
-        # Add validation results if available
-        if validation_results:
-            custom_checks = [
-                f"- Entry script exists: {validation_results.get('entry_script_exists', False)}",
-                f"- Python files in experiment directory: {validation_results.get('python_files_exist', False)}",
-                f"- results_summary.json exists: {validation_results.get('results_file_exists', False)}"
-            ]
-            
-            prompt_parts.append(f"# Validation Checks\n" + "\n".join(custom_checks) + "\n\n")
-            
-            # Add bash output if available
-            if validation_results.get('bash_output'):
-                prompt_parts.append(f"# Bash Output\n```\n{validation_results.get('bash_output')}\n```\n\n")
-            
-            # Add updated task instructions for this iteration
-            prompt_parts.append(
-                "# Iteration Task\n"
-                "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
-                f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
+        if critique_results and validation_results:
+            # Process and get both the enriched checklist and flattened validation
+            enriched_checklist, flattened_validation = process_validation_checklist(
+                critique_results, validation_results
             )
-    
-    return "".join(prompt_parts)
-
-
-# ------------------------------------------------------------------
-# Helper method for logging validation results
-# ------------------------------------------------------------------
-def log_validation_results(validation_results: Dict[str, Any], iteration: int) -> None:
-    """Helper method to log validation results with clear prefacing."""
-    logger = logging.getLogger("ai_research_agent.experiment_utils")
-    
-    logger.info("=" * 50)
-    logger.info(f"VALIDATION RESULTS - Iteration {iteration + 1}")
-    logger.info("-" * 50)
-    
-    # Log core validation checks
-    logger.info("VALIDATION: Entry script exists: %s", 
-                   "✓ PASS" if validation_results["entry_script_exists"] else "✗ FAIL")
-    logger.info("VALIDATION: Python files exist: %s", 
-                   "✓ PASS" if validation_results["python_files_exist"] else "✗ FAIL")
-    logger.info("VALIDATION: Results file exists: %s", 
-                   "✓ PASS" if validation_results["results_file_exists"] else "✗ FAIL")
-    
-    # Log all errors if any
-    if validation_results["errors"]:
-        logger.warning("VALIDATION ERRORS:")
-        for i, error in enumerate(validation_results["errors"], 1):
-            logger.warning("  %d. %s", i, error)
-    else:
-        logger.info("VALIDATION: No errors detected")
+            
+            # Add enriched checklist to the prompt
+            prompt_parts.append(f"# Validation Checklist\n```json\n{json.dumps(enriched_checklist, indent=2)}\n```\n\n")
+            
+            # Log validation results with enriched data
+            log_validation_results(validation_results, enriched_checklist, iteration-1)
+            
+        elif validation_results:
+            # Just include basic validation results
+            basic_validation = {
+                "entry_script_exists": {
+                    "is_met": validation_results.get("entry_script_exists", False),
+                    "description": "Whether the entry script exists and is not empty"
+                },
+                "python_files_exist": {
+                    "is_met": validation_results.get("python_files_exist", False),
+                    "description": "Whether Python files exist in the experiment directory"
+                },
+                "results_file_exists": {
+                    "is_met": validation_results.get("results_file_exists", False),
+                    "description": "Whether the results_summary.json file exists"
+                }
+            }
+            
+            # Add to prompt
+            prompt_parts.append(f"# Validation Checks\n```json\n{json.dumps(basic_validation, indent=2)}\n```\n\n")
+            
+            # Add to flattened validation
+            for key in ["entry_script_exists", "python_files_exist", "results_file_exists"]:
+                flattened_validation[key] = validation_results.get(key, False)
+            
+            # Log basic validation results
+            log_validation_results(validation_results, None, iteration-1)
         
-    # Log bash output summary if available
-    if validation_results.get("bash_output"):
-        # Get first few lines of bash output for the log (avoid excessive logging)
-        bash_lines = validation_results["bash_output"].split("\n")
-        preview = "\n".join(bash_lines[:5])
-        if len(bash_lines) > 5:
-            preview += f"\n... and {len(bash_lines) - 5} more lines"
-        logger.info("VALIDATION: Bash execution output preview:\n%s", preview)
+        # Add bash output if available
+        if validation_results and validation_results.get("bash_output"):
+            prompt_parts.append(f"# Bash Output\n```\n{validation_results.get('bash_output')}\n```\n\n")
         
-    logger.info("VALIDATION: Overall status: %s", 
-                   "✓ PASSED" if all([
-                       validation_results["entry_script_exists"],
-                       validation_results["python_files_exist"], 
-                       validation_results["results_file_exists"]
-                   ]) else "✗ FAILED")
-    logger.info("=" * 50)
+        # Add updated task instructions for this iteration
+        prompt_parts.append(
+            "# Iteration Task\n"
+            "Review the feedback and continue implementing the experiment. Fix any errors and address the critique.\n"
+            f"Ensure that '{entry_script}' correctly runs the experiment and outputs results to '/results/results_summary.json'.\n\n"
+        )
+    
+    # Return both the formatted prompt and the flattened validation
+    return "".join(prompt_parts), flattened_validation

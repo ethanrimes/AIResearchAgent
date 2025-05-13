@@ -138,7 +138,7 @@ class RunBashTool(BaseTool):
             if self.output_dir:
                 import time
                 ts = time.strftime("%Y%m%d_%H%M%S")
-                out_file = self.output_dir / f"bash_output_{ts}.txt"
+                out_file = self.output_dir / f"{ts}_bash_output.txt"
                 self.logger.info(f"Writing command output to {out_file}")
                 with open(out_file, "w", encoding="utf-8") as f:
                     f.write(f"Command: {command}\nReturn code: {rc}\n\n")

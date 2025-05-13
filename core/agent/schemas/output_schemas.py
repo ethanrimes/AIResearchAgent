@@ -137,19 +137,70 @@ class EvaluatorOutput(BaseModel):
 # CritiqueChain
 # ---------------------------------------------------------------------------
 
-class HypothesesImplementation(BaseModel):
-    is_complete: bool = Field(..., description="Whether all hypotheses are fully implemented")
-    missing_elements: List[str] = Field(default_factory=list, description="List of missing hypothesis elements if any")
+class RequirementDetail(BaseModel):
+    is_met: bool = Field(..., description="Whether the requirement is met")
+    comment: str = Field("", description="Explanation why the requirement is not met, if applicable")
 
+
+class HypothesisImplementationDetail(BaseModel):
+    hypothesis_id: str = Field(..., description="The ID of the hypothesis (e.g., H1)")
+    is_implemented: bool = Field(..., description="Whether this hypothesis is fully implemented")
+    comment: str = Field("", description="Explanation why the hypothesis is not fully implemented, if applicable")
+
+
+class HypothesesImplementation(BaseModel):
+    all_implemented: bool = Field(..., description="Whether all hypotheses are fully implemented")
+    implementation_details: List[HypothesisImplementationDetail] = Field(
+        default_factory=list, description="Details for each hypothesis implementation"
+    )
+
+
+class RequirementDetail(BaseModel):
+    is_met: bool = Field(..., description="Whether the requirement is met")
+    comment: str = Field("", description="Explanation why the requirement is not met, if applicable")
+
+class HypothesisImplementationDetail(BaseModel):
+    hypothesis_id: str = Field(..., description="The ID of the hypothesis (e.g., H1)")
+    is_implemented: bool = Field(..., description="Whether this hypothesis is fully implemented")
+    comment: str = Field("", description="Explanation why the hypothesis is not fully implemented, if applicable")
+
+class HypothesesImplementation(BaseModel):
+    all_implemented: bool = Field(..., description="Whether all hypotheses are fully implemented")
+    implementation_details: List[HypothesisImplementationDetail] = Field(
+        default_factory=list, description="Details for each hypothesis implementation"
+    )
 
 class RequirementsMet(BaseModel):
-    hypotheses_implementation: HypothesesImplementation
-    correct_entrypoint: bool = Field(..., description="Whether run_experiment.sh is the correct entrypoint")
-    baseline_calculation: bool = Field(..., description="Whether a baseline is correctly calculated")
-    metrics_calculation: bool = Field(..., description="Whether metrics are calculated as specified")
-    dataloader_api_usage: bool = Field(..., description="Whether the dataloader API is used correctly")
-    ollama_client_api_usage: bool = Field(..., description="Whether the ollama LLM client API is used correctly")
-    extractor_evaluator_api_usage: bool = Field(..., description="Whether the answer extractor and evaluator API is used correctly")
+    hypotheses_implementation: HypothesesImplementation = Field(
+        ..., description="Whether all hypotheses are fully implemented with details for each"
+    )
+    baseline_calculation: RequirementDetail = Field(
+        ..., description="Whether a baseline is correctly calculated"
+    )
+    correct_entrypoint: RequirementDetail = Field(
+        ..., description="Whether run_experiment.sh is the correct entrypoint"
+    )
+    final_results_metrics: RequirementDetail = Field(
+        ..., description="Whether metrics are calculated as specified in results_summary.json"
+    )
+    final_results_authenticity: RequirementDetail = Field(
+        ..., description="Whether results are truly the output of the experiment, not hardcoded"
+    )
+    dataloader_api_usage: RequirementDetail = Field(
+        ..., description="Whether the dataloader API is used correctly"
+    )
+    ollama_client_api_usage: RequirementDetail = Field(
+        ..., description="Whether the ollama LLM client API is used correctly"
+    )
+    extractor_evaluator_api_usage: RequirementDetail = Field(
+        ..., description="Whether the answer extractor and evaluator API is used correctly"
+    )
+    sufficient_answer_length: RequirementDetail = Field(
+        ..., description="Whether generations have enough tokens to generate complete answers"
+    )
+    no_cheating: RequirementDetail = Field(
+        ..., description="Whether the algorithm avoids exposing ground truth unfairly"
+    )
 
 
 class FileStatusInfo(BaseModel):
@@ -158,17 +209,8 @@ class FileStatusInfo(BaseModel):
     issues: List[str] = Field(default_factory=list, description="List of issues with this file if any")
 
 
-class FileStatusSummary(BaseModel):
-    total_files: int = Field(..., description="Total number of files in the plan")
-    finished_files: int = Field(..., description="Number of files that are complete")
-    unfinished_files: int = Field(..., description="Number of files not yet completed")
-    error_files: int = Field(..., description="Number of files with errors")
-    completion_percentage: float = Field(..., description="Percentage of files that are complete")
-
-
 class FileStatus(BaseModel):
     files: List[FileStatusInfo] = Field(..., description="Status of individual files")
-    summary: FileStatusSummary = Field(..., description="Summary of file completion status")
 
 
 class BuildStepProgress(BaseModel):
@@ -180,15 +222,8 @@ class BuildStepProgress(BaseModel):
     remaining_elements: List[str] = Field(default_factory=list, description="Description of elements still to be implemented")
 
 
-class TypeCheckResults(BaseModel):
-    has_errors: bool = Field(..., description="Whether type checking found any errors")
-    error_count: int = Field(..., description="Number of type errors found")
-    errors: List[str] = Field(default_factory=list, description="List of type errors if any")
-
-
 class CritiqueOutput(BaseModel):
     requirements_met: RequirementsMet
     file_status: FileStatus
-    type_check_results: TypeCheckResults
     build_sequence_progress: List[BuildStepProgress] = Field(default_factory=list, description="Progress on each step in the build sequence")
     suggestions: List[str] = Field(default_factory=list, description="Improvement suggestions for unmet requirements")
